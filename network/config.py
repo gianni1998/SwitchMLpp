@@ -1,0 +1,2 @@
+NUM_PORTS = 4
+NUM_WORKERS = 2
