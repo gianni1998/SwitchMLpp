@@ -1,16 +1,12 @@
-import sys, os
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
-
-from lib.gen import GenInts, GenMultipleOfInRange
-from lib.test import CreateTestData, RunIntTest
-from lib.worker import *
-from lib.comm import  unreliable_send, unreliable_receive
 import socket
 
-from util.utils import packet_builder, packet_parser
-from util.constants import NUM_ITER, CHUNK_SIZE, TIMEOUT
+from python.lib.gen import GenInts, GenMultipleOfInRange
+from python.lib.test import CreateTestData, RunIntTest
+from python.lib.worker import Log, GetRankOrExit
+from python.lib.comm import  unreliable_send, unreliable_receive
+
+from python.services.packet_service import packet_builder, packet_parser
+from python.config import NUM_ITER, CHUNK_SIZE, TIMEOUT
 
 
 def AllReduce(soc, rank, data, result):

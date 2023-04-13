@@ -1,4 +1,4 @@
-from .edge import Edge
+from python.models.edge import Edge
 
 
 class Node:

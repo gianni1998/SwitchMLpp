@@ -1,7 +1,7 @@
-from models.node import Node
+from python.models.node import Node
 
 
-class Fattree:
+class FatTree:
     def __init__(self, num_ports):
         self.servers = []
         self.switches = []

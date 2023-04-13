@@ -1,14 +1,12 @@
-import sys, os
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
-
-from lib import config
-from p4app import P4Mininet
+import sys
 from mininet.cli import CLI
 
-from fat_tree import FattreeNet, FattreeController
-from sml_topo import SMLTopo, SMLController
+from python.lib import config
+from p4app import P4Mininet
+from python.controllers.fat_tree_controller import FattreeController
+from python.controllers.sml_controller import SMLController
+from python.topologies.fat_tree_topo import FatTreeTopo
+from python.topologies.sml_topo import SMLTopo
 
 
 def build_mini_net(controller):
@@ -25,10 +23,8 @@ if __name__ == '__main__':
     selected_topo = sys.argv[1]
 
     if selected_topo == "Fattree":
-        topo = FattreeNet()
+        topo = FatTreeTopo()
         build_mini_net(FattreeController())
     else:
         topo = SMLTopo()
         build_mini_net(SMLController())
-
-    

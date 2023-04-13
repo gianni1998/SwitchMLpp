@@ -1,3 +1,8 @@
+# Topo
+NUM_PORTS = 4
+NUM_WORKERS = 2
+
+# Worker
 NUM_ITER   = 1
 CHUNK_SIZE = 32  
 SWITCH_ML_PACKET_SIZE = 20

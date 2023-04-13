@@ -1,16 +1,4 @@
-from mininet.topo import Topo
-from mininet.cli import CLI
-from config import NUM_WORKERS
-
-
-class SMLTopo(Topo):
-    def __init__(self, **opts):
-        Topo.__init__(self, **opts)
-
-        switch = self.addSwitch(name="s0")
-        for i in range(1, NUM_WORKERS+1):
-            wx = self.addHost(name=f"w{i-1}", ip=f"10.0.0.{i}", mac=f"08:00:00:00:0{i}:{i}{i}")
-            self.addLink(switch, wx, port1=i, port2=0)
+from python.config import NUM_WORKERS
 
 
 class SMLController:

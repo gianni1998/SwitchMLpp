@@ -1,9 +1,9 @@
 from scapy.all import raw
-from lib.worker import Log
 
-from util.constants import CHUNK_SIZE, SWITCH_ML_PACKET_SIZE
-from packets.data_packet import Data
-from packets.switchml_packet import SwitchML
+from python.lib.worker import Log
+from python.config import CHUNK_SIZE, SWITCH_ML_PACKET_SIZE
+from python.models.data_packet import Data
+from python.models.switchml_packet import SwitchML
 
 
 def packet_builder(wid, ver, idx, offset, vector):
@@ -32,7 +32,7 @@ def packet_parser(packet, result):
     size = int.from_bytes(load[16:20], byteorder="big")
     res = [int.from_bytes(load[i:i+4], byteorder="big") for i in range(SWITCH_ML_PACKET_SIZE, len(load), 4)]
 
-    Log(f"Chuncky: {idx}, VER: {ver}")
+    Log(f"Chunk: {idx}, VER: {ver}")
     result[offset:offset + size] = res[:size]
 
     offset += CHUNK_SIZE
