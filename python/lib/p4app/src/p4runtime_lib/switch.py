@@ -38,7 +38,7 @@ class SwitchConnection(object):
         self.address = address
         self.device_id = device_id
         self.p4info = None
-        self.channel = grpc.insecure_channel(self.address)
+        self.channel = grpc.insecure_channel(self.address, options=(('grpc.enable_http_proxy', 0),))
         if proto_dump_file is not None:
             interceptor = GrpcRequestLogger(proto_dump_file)
             self.channel = grpc.intercept_channel(self.channel, interceptor)

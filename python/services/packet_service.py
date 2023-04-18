@@ -4,9 +4,10 @@ from python.lib.worker import Log
 from python.config import CHUNK_SIZE, SWITCH_ML_PACKET_SIZE
 from python.models.data_packet import Data
 from python.models.switchml_packet import SwitchML
+from python.models.subscription_packet import Subscription
 
 
-def packet_builder(wid, ver, idx, offset, vector):
+def sml_packet_builder(wid, ver, idx, offset, vector):
     data = [0] * 32
     data[:CHUNK_SIZE] = vector
 
@@ -23,7 +24,7 @@ def packet_builder(wid, ver, idx, offset, vector):
     return raw(sml / data)
 
 
-def packet_parser(packet, result):
+def sml_packet_parser(packet, result):
     load = packet[-(CHUNK_SIZE*4+SWITCH_ML_PACKET_SIZE):]
 
     ver = int.from_bytes(load[4:8], byteorder="big")
@@ -40,3 +41,9 @@ def packet_parser(packet, result):
     ver = (ver+1)%2
 
     return offset, idx, ver
+
+
+def sub_packet_builder(ip, type):
+    pkt = Subscription(ip=ip, type=type)
+
+    return raw(pkt)

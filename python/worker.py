@@ -5,7 +5,7 @@ from python.lib.test import CreateTestData, RunIntTest
 from python.lib.worker import Log, GetRankOrExit
 from python.lib.comm import  unreliable_send, unreliable_receive
 
-from python.services.packet_service import packet_builder, packet_parser
+from python.services.packet_service import sml_packet_builder, sml_packet_parser, sub_packet_builder
 from python.config import NUM_ITER, CHUNK_SIZE, TIMEOUT
 
 
@@ -28,7 +28,7 @@ def AllReduce(soc, rank, data, result):
     idx = 1
 
     while offset < len(data):
-        packet = packet_builder(rank, ver, idx, offset, data[offset:offset+CHUNK_SIZE])
+        packet = sml_packet_builder(rank, ver, idx, offset, data[offset:offset+CHUNK_SIZE])
         while(1):
             unreliable_send(soc, packet, addr)
             Log(f"Sending: {idx}, VER: {ver}")
@@ -40,7 +40,7 @@ def AllReduce(soc, rank, data, result):
             except socket.timeout:
                 Log("Time out")
 
-        offset, idx, ver = packet_parser(packet, result)
+        offset, idx, ver = sml_packet_parser(packet, result)
 
     Log(f'final-result: {result}')
 
@@ -60,6 +60,23 @@ def main():
         AllReduce(s, rank, data_out, data_in)
         RunIntTest("udp-iter-%d" % i, rank, data_in, True)
     Log("Done")
+
+
+def subscriber(subscribe: bool):
+    """
+    Notifies the controller that is wants to (un)subscribe to an aggregation group
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    host = socket.gethostname()
+    port = 12345
+
+    pkt = sub_packet_builder(host, int(subscribe))
+
+    s.connect((host, port))
+    s.send(pkt)
+
+    s.close()
+
 
 if __name__ == '__main__':
     main()
