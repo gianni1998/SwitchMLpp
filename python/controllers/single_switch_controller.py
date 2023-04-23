@@ -1,6 +1,6 @@
 import os
 
-from python.config import NUM_WORKERS
+from python.config import NUM_WORKERS, SDN_CONTROLLER_IP, SDN_CONTROLLER_MAC
 
 
 class SingleSwitchController:
@@ -31,8 +31,6 @@ class SingleSwitchController:
         sw_mac = "08:10:00:00:00:00"
         sw.config(mac = sw_mac)
 
-        sw.cmd('ifconfig s1 10.0.0.1')
-
         # ARP
         sw.insertTableEntry(
             table_name="TheIngress.arpHandler.handler",
@@ -40,3 +38,26 @@ class SingleSwitchController:
             action_name="TheIngress.arpHandler.forward",
             action_params={"switch_mac": sw_mac}
         )
+
+        # Controller
+        sw.insertTableEntry(
+            table_name="TheIngress.ipv4Handler.handler",
+            match_fields={"hdr.ipv4.destinationAddress": [SDN_CONTROLLER_IP, 32]},
+            action_name="TheIngress.ipv4Handler.forward",
+            action_params= {
+                "destinationAddress": SDN_CONTROLLER_MAC,
+                "port": 0
+            }
+        )
+
+        # Workers
+        for i in range(1, NUM_WORKERS+1):
+            sw.insertTableEntry(
+                table_name="TheIngress.ipv4Handler.handler",
+                match_fields={"hdr.ipv4.destinationAddress": [f"10.0.0.{i}", 32]},
+                action_name="TheIngress.ipv4Handler.forward",
+                action_params= {
+                    "destinationAddress": f"08:00:00:00:0{i}:{i}{i}",
+                    "port": i
+                }
+            )

@@ -1,7 +1,18 @@
 from scapy.all import Packet, BitField
 
 
-class Data(Packet):
+class SwitchMLPacket(Packet):
+    name = "SwitchMLPacket"
+    fields_desc = [
+        BitField("wid", 0, 32),
+        BitField("ver", 0, 32),
+        BitField("idx", 0, 32),
+        BitField("offset", 0, 32),
+        BitField("size", 0, 32)
+    ]
+
+
+class DataPacket(Packet):
     name = "DataPacket"
     fields_desc = [
         BitField("value0", 0, 32),
@@ -37,3 +48,12 @@ class Data(Packet):
         BitField("value30", 0, 32),  
         BitField("value31", 0, 32) 
     ]
+
+
+class SubscriptionPacket(Packet):
+    name = "SubscriptionPacket"
+    fields_desc = [
+        BitField("aggregation_id", 0, 32),
+        BitField("type", 0, 32),
+    ]
+

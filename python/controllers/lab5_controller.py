@@ -3,7 +3,7 @@ import os
 from python.config import NUM_WORKERS
 
 
-class SMLController:
+class Lab5Controller:
     def __init__(self):
         pass
 
@@ -31,7 +31,6 @@ class SMLController:
         sw_mac = "08:10:00:00:00:00"
         sw_ip = "10.0.1.1"
         sw.config(mac = sw_mac)
-        sw.setIP(sw_ip)
 
         # ARP
         sw.insertTableEntry(
