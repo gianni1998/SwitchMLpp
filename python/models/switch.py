@@ -14,4 +14,13 @@ class SwitchConnection:
 
     mg_ports: Dict[int, List[int]]
     """Dictionary containing all ports of a multicast group"""
+
+    connected_ip: List[str]
+    """IP list of connected SML workers"""
+
+    def __init__(self, connection):
+        self.connection = connection
+        self.mgids = []
+        self.mg_ports = {}
+        self.connected_ip = []
     

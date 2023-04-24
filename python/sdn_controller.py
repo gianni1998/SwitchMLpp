@@ -24,6 +24,9 @@ class SDNController(P4Host):
         P4Host.__init__(self, name, **params)
 
         self.sw_conns = {}
+        self.net = None
+
+        self.ip_to_mac = {}
 
 
     def start(self):
@@ -31,17 +34,22 @@ class SDNController(P4Host):
         Method to open a tcp connection and listen for incomming traffic
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, 25, str("lo" + '\0').encode('utf-8'))
             s.bind(("", SDN_CONTROLLER_PORT))
 
-            print("Test 1")
+            print(self.cmd("ifconfig"))
             s.listen()
 
             while 1:
                 print("Test 2")
                 conn, addr = s.accept()
-                print(conn)
-                thread = threading.Thread(target=self._client_thread, args=(conn, addr))
-                thread.start()      
+                print(conn + " " + addr)
+
+                conn.sendall("Tjupapi")
+                conn.close()
+                break
+                # thread = threading.Thread(target=self._client_thread, args=(conn, addr))
+                # thread.start()      
         # print(self.cmd("nc -l 5005"))  
 
 
@@ -66,38 +74,48 @@ class SDNController(P4Host):
 
 
     def _process(self, data, addr):
+        pass
+
+    def test(self):
         """
         Method to process the subscription packet
         """
+        
+        # ToDo: get from packet
         sw_name = "s0"
+        sub = True
+        mgid = 1
 
         if sw_name not in self.sw_conns.keys():
-            self.sw_conns[sw_name] = SwitchConnection()
+            self.sw_conns[sw_name] = SwitchConnection(connection=self.net.get(sw_name))
 
-        self._mg_entry(conn=self.sw_conns[sw_name], mgid=addr, subscribe=addr)
+        port = 1
+        ip = "10.0.0.1"
+
+        conn = self.sw_conns[sw_name]
+
+        self._mg_entry(conn=conn, mgid=mgid, port=port, subscribe=sub)
+        self._sml_entry(conn=conn, ip=ip, port=port, subscribe=sub)
 
         # ToDo: increment counter
+        
 
 
 
-    def _mg_entry(self, conn: SwitchConnection, mgid: int, subscribe: bool):
+    def _mg_entry(self, conn: SwitchConnection, mgid: int, port: int, subscribe: bool):
         """
         Method to Create, Update or Delete multicast entry
         """
-
-        # ToDo: calculate port
-        port = 1
-
         if subscribe:
             if mgid not in conn.mgids:
                 conn.mgids.append(mgid)
                 conn.mg_ports[mgid] = [port]
                 conn.connection.addMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
-            else:
+            elif port not in conn.mg_ports[mgid]:
                 conn.mg_ports[mgid].append(port)
                 conn.connection.updateMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
 
-        elif mgid in conn.mgids:
+        elif mgid in conn.mgids and port in conn.mg_ports[mgid]:
             if conn.mg_ports[mgid].count() > 1:
                 conn.mg_ports[mgid].remove(port)
                 conn.connection.updateMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
@@ -106,10 +124,33 @@ class SDNController(P4Host):
                 del conn.mg_ports[mgid]
 
 
-    def _sml_entry(self):
+    def _sml_entry(self, conn: SwitchConnection, ip: str, port: int, subscribe: bool):
         """
-        Method to Create, Update or Delete SwitchML entry
+        Method to Create or Delete SwitchML entry
         """
-        pass
+        if subscribe and ip not in conn.connected_ip:
+            conn.connected_ip.append(ip)
+
+            conn.connection.insertTableEntry(
+                table_name="TheEgress.smlHandler.handler",
+                match_fields={"standard_metadata.egress_port": port},
+                action_name="TheEgress.smlHandler.forward",
+                action_params={
+                    "worker_mac": self.ip_to_mac.get(ip, "08:00:00:00:00:00"),
+                    "worker_ip": ip,
+                },
+            )
+        elif not subscribe and ip in conn.connected_ip:
+            conn.connected_ip.remove(ip)
+
+            conn.connection.removeTableEntry(
+                table_name="TheEgress.smlHandler.handler",
+                match_fields={"standard_metadata.egress_port": port},
+                action_name="TheEgress.smlHandler.forward",
+                action_params={
+                    "worker_mac": self.ip_to_mac.get(ip, "08:00:00:00:00:00"),
+                    "worker_ip": ip,
+                },
+            )
 
         

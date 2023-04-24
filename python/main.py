@@ -1,13 +1,13 @@
 from mininet.cli import CLI
+from mininet.topo import Topo
 
 import python.lib.config
 from python.lib.p4app.src.p4app import P4Mininet
-from python.controllers.single_switch_controller import SingleSwitchController
-from python.controllers.lab5_controller import Lab5Controller
-from python.topologies.single_switch_topo import SingleSwitchTopo
+from python.network.topology import Lab5Topo, SingleSwitchTopo
+from python.network.controller import TopoController, Lab5Controller, SingleSwitchController
 
 
-def build_mini_net(controller, topo):
+def build_mini_net(controller: TopoController, topo: Topo):
     net = P4Mininet(program="p4/main.p4", topo=topo)
     net.run_control_plane = lambda: controller.run_control_plane(net)
 
