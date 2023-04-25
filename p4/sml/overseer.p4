@@ -7,7 +7,7 @@ control Overseer(in headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
 
-    register<bit<32>> (NUM_OF_WORKERS) r;
+    register<bit<32>> (MAX_WORKERS) r;
 
     apply {
         r.read(meta.idx, hdr.sml.wid);

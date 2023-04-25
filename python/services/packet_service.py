@@ -5,11 +5,11 @@ from python.config import CHUNK_SIZE, SWITCH_ML_PACKET_SIZE
 from python.models.packets import SwitchMLPacket, DataPacket
 
 
-def sml_packet_builder(wid, ver, idx, offset, vector):
+def sml_packet_builder(wid, ver, idx, offset, mgid, vector):
     data = [0] * 32
     data[:CHUNK_SIZE] = vector
 
-    sml = SwitchMLPacket(wid=wid, ver=ver, idx=idx, offset=offset, size=CHUNK_SIZE)
+    sml = SwitchMLPacket(wid=wid, ver=ver, idx=idx, offset=offset, mgid=mgid, size=CHUNK_SIZE)
     data = DataPacket(value0=data[0], value1=data[1], value2=data[2], value3=data[3], 
                 value4=data[4], value5=data[5], value6=data[6], value7=data[7],
                 value8=data[8], value9=data[9], value10=data[10], value11=data[11],
@@ -28,7 +28,7 @@ def sml_packet_parser(packet, result):
     ver = int.from_bytes(load[4:8], byteorder="big")
     idx = int.from_bytes(load[8:12], byteorder="big")
     offset = int.from_bytes(load[12:16], byteorder="big")
-    size = int.from_bytes(load[16:20], byteorder="big")
+    size = int.from_bytes(load[20:24], byteorder="big")
     res = [int.from_bytes(load[i:i+4], byteorder="big") for i in range(SWITCH_ML_PACKET_SIZE, len(load), 4)]
 
     Log(f"Chunk: {idx}, VER: {ver}")

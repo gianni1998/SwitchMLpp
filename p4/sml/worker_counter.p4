@@ -18,7 +18,7 @@ control WorkerCounter (inout headers hdr,
             if (meta.seen == 0) {
                 meta.count = meta.count + 1;
 
-                if (meta.count == NUM_OF_WORKERS) {
+                if (meta.count == meta.numWorkers) {
                     meta.count = 0;
                 }
 
@@ -30,7 +30,7 @@ control WorkerCounter (inout headers hdr,
             if (meta.seen == 0) {
                 meta.count = meta.count + 1;
 
-                if (meta.count == NUM_OF_WORKERS) {
+                if (meta.count == meta.numWorkers) {
                     meta.count = 0;
                 }
 

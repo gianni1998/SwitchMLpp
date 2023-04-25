@@ -1,15 +1,11 @@
 import socket
-import struct
 import threading
-
-from mininet.util import quietRun
-from mininet.node import Controller
 
 from python.lib.p4app.src.p4_mininet import P4Host
 from python.config import SDN_CONTROLLER_PORT, BUFFER_SIZE
 
 from python.models.switch import SwitchConnection
-
+from python.models.packets import SubscriptionPacket
 
 
 class SDNController(P4Host):
@@ -25,7 +21,7 @@ class SDNController(P4Host):
 
         self.sw_conns = {}
         self.net = None
-
+        self.g = None
         self.ip_to_mac = {}
 
 
@@ -34,23 +30,16 @@ class SDNController(P4Host):
         Method to open a tcp connection and listen for incomming traffic
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, 25, str("lo" + '\0').encode('utf-8'))
-            s.bind(("", SDN_CONTROLLER_PORT))
+            #s.setsockopt(socket.SOL_SOCKET, 25, str("eth0" + '\0').encode('utf-8'))
 
-            print(self.cmd("ifconfig"))
+            s.bind(("", SDN_CONTROLLER_PORT))
             s.listen()
 
             while 1:
-                print("Test 2")
                 conn, addr = s.accept()
-                print(conn + " " + addr)
 
-                conn.sendall("Tjupapi")
-                conn.close()
-                break
-                # thread = threading.Thread(target=self._client_thread, args=(conn, addr))
-                # thread.start()      
-        # print(self.cmd("nc -l 5005"))  
+                thread = threading.Thread(target=self._client_thread, args=(conn, addr))
+                thread.start()      
 
 
     def _client_thread(self, conn, addr):
@@ -74,33 +63,34 @@ class SDNController(P4Host):
 
 
     def _process(self, data, addr):
-        pass
-
-    def test(self):
         """
         Method to process the subscription packet
         """
         
         # ToDo: get from packet
+        pkt = SubscriptionPacket(data)
+        sub = pkt[SubscriptionPacket].type
+        mgid = pkt[SubscriptionPacket].mgid
+
         sw_name = "s0"
-        sub = True
-        mgid = 1
 
         if sw_name not in self.sw_conns.keys():
             self.sw_conns[sw_name] = SwitchConnection(connection=self.net.get(sw_name))
-
-        port = 1
+        
         ip = "10.0.0.1"
+        port = int(ip.split(".")[-1])
 
         conn = self.sw_conns[sw_name]
 
+
+        old_count = conn.mg_ports[mgid].count()
         self._mg_entry(conn=conn, mgid=mgid, port=port, subscribe=sub)
+
+        new_count = conn.mg_ports[mgid].count()
+        self._num_workers_entry(conn=conn, mgid=mgid, old=old_count, new=new_count)
+
         self._sml_entry(conn=conn, ip=ip, port=port, subscribe=sub)
-
-        # ToDo: increment counter
         
-
-
 
     def _mg_entry(self, conn: SwitchConnection, mgid: int, port: int, subscribe: bool):
         """
@@ -122,6 +112,32 @@ class SDNController(P4Host):
             else:
                 conn.connection.deleteMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
                 del conn.mg_ports[mgid]
+
+
+    def _num_workers_entry(self, conn: SwitchConnection, mgid: int, old: int, new: int):
+        """
+        Method to update the number of workers entry
+        """
+        if old == new:
+            return
+
+        conn.connection.removeTableEntry(
+            table_name="TheIngress.num_workers",
+            match_fields={"hdr.sml.mgid": mgid},
+            action_name="TheIngress.set_num_workers",
+            action_params={
+                "num_workers": old,
+            },
+        )
+
+        conn.connection.insertTableEntry(
+            table_name="TheIngress.num_workers",
+            match_fields={"hdr.sml.mgid": mgid},
+            action_name="TheIngress.set_num_workers",
+            action_params={
+                "num_workers": new,
+            },
+        )
 
 
     def _sml_entry(self, conn: SwitchConnection, ip: str, port: int, subscribe: bool):

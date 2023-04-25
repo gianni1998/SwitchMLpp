@@ -1,6 +1,7 @@
 import socket
 from scapy.all import raw
 
+import python.lib.config
 from python.lib.gen import GenInts, GenMultipleOfInRange
 from python.lib.test import CreateTestData, RunIntTest
 from python.lib.worker import Log, GetRankOrExit
@@ -16,12 +17,12 @@ class SMLWorker:
     Class that represents a SwitchML++ worker
     """
 
-    def __inint__(self, rank: int, **params):
+    def __init__(self, rank: int, **params):
         """
         Constructor
         """
         self.rank = rank
-        self.aggregation_id = params.get("aggregation_id", 1)
+        self.mgid = params.get("mgid", 1)
 
         self.sdn_ip = params.get("sdn_ip", SDN_CONTROLLER_IP)
         self.sdn_port = params.get("sdn_port", SDN_CONTROLLER_PORT)
@@ -31,7 +32,7 @@ class SMLWorker:
         """
         Method to start the work flow of a worker (initialise, all reduce and terminate)
         """
-        self.initialise()
+        #self.initialise()
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.bind((f'10.0.0.{int(self.rank+1)}', 12345))
@@ -47,7 +48,7 @@ class SMLWorker:
             RunIntTest("udp-iter-%d" % i, self.rank, data_in, True)
         Log("Done")
 
-        self.terminate()
+        #self.terminate()
 
 
     def initialise(self):
@@ -66,7 +67,7 @@ class SMLWorker:
         idx = 1
 
         while offset < len(data):
-            packet = sml_packet_builder(self.rank, ver, idx, offset, data[offset:offset+CHUNK_SIZE])
+            packet = sml_packet_builder(self.rank, ver, idx, offset, self.mgid, data[offset:offset+CHUNK_SIZE])
             while(1):
                 unreliable_send(soc, packet, addr)
                 Log(f"Sending: {idx}, VER: {ver}")
@@ -96,11 +97,10 @@ class SMLWorker:
         """
         pkt = raw(SubscriptionPacket(aggregation_id=self.aggregation_id, 
                                      type=int(subscribe)))
-
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((self.sdn_ip, self.sdn_port))
-        s.send(pkt)
-        s.close()
+        
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((self.sdn_ip, self.sdn_port))
+            s.send(pkt)
 
 
 if __name__ == '__main__':

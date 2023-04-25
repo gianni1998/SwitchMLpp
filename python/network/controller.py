@@ -72,6 +72,16 @@ class Lab5Controller(TopoController):
                 },
             )
 
+        # worker count
+        sw.insertTableEntry(
+            table_name="TheIngress.num_workers",
+            match_fields={"hdr.sml.mgid": multicast_group_id},
+            action_name="TheIngress.set_num_workers",
+            action_params={
+                "num_workers": NUM_WORKERS,
+            },
+        )
+
 
 class SingleSwitchController(TopoController):
     

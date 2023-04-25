@@ -71,16 +71,31 @@ control TheIngress(inout headers hdr,
     hdr.udp.dstPort = temp;
   }
 
+  action set_num_workers(bit<32> num_workers) {
+    meta.numWorkers = num_workers;
+  }
+
   table switch_mac_and_ip {
     actions = { @defaultonly set_switch_mac_and_ip; }
     size = 1;
   }
+
+  table num_workers {
+        key = { hdr.sml.mgid: exact; }
+        actions = {
+            set_num_workers;
+            NoAction;
+        }
+        size = 1024;
+        default_action = NoAction();
+    }
 
   apply {
     if (hdr.arp.isValid()) {
       arpHandler.apply(hdr, standard_metadata);
     } else if (hdr.sml.isValid()) {
 
+      num_workers.apply();
       bit<32> idx = 0;
 
       @atomic {

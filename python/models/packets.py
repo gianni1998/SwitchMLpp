@@ -8,6 +8,7 @@ class SwitchMLPacket(Packet):
         BitField("ver", 0, 32),
         BitField("idx", 0, 32),
         BitField("offset", 0, 32),
+        BitField("mgid", 0, 32),
         BitField("size", 0, 32)
     ]
 
@@ -53,7 +54,7 @@ class DataPacket(Packet):
 class SubscriptionPacket(Packet):
     name = "SubscriptionPacket"
     fields_desc = [
-        BitField("aggregation_id", 0, 32),
+        BitField("mgid", 0, 32),
         BitField("type", 0, 32),
     ]
 
