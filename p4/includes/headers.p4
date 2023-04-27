@@ -87,6 +87,10 @@ header data_t {
   sml_value_t value31;
 }
 
+header sync_t {
+  bit<32> offset;
+}
+
 struct headers {
   ethernet_t ethernet;
   arp_t arp;
@@ -94,6 +98,7 @@ struct headers {
   udp_t udp;
   sml_t sml;
   data_t data;
+  sync_t sync;
 }
 
 #endif

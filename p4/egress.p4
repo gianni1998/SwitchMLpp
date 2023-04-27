@@ -8,7 +8,7 @@ control TheEgress(inout headers hdr,
   SMLHandler() smlHandler;
 
   apply {
-    if (hdr.sml.isValid()){
+    if (hdr.sml.isValid() || hdr.sync.isValid()){
       smlHandler.apply(hdr, standard_metadata);
     }
   }

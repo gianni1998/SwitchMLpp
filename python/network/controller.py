@@ -53,7 +53,7 @@ class Lab5Controller(TopoController):
             # Normal traffic
             sw.insertTableEntry(
                 table_name="TheIngress.ipv4Handler.handler",
-                match_fields={"hdr.ipv4.destinationAddress": [f"10.0.0.{i}", 32]},
+                match_fields={"hdr.ipv4.destinationAddress": [f"10.0.1.{i+1}", 32]},
                 action_name="TheIngress.ipv4Handler.forward",
                 action_params= {
                     "destinationAddress": f"08:00:00:00:0{i}:{i}{i}",
@@ -68,7 +68,7 @@ class Lab5Controller(TopoController):
                 action_name="TheEgress.smlHandler.forward",
                 action_params={
                     "worker_mac": f"08:00:00:00:0{i}:{i}{i}",
-                    "worker_ip": f"10.0.0.{i}",
+                    "worker_ip": f"10.0.1.{i+1}",
                 },
             )
 
@@ -90,6 +90,7 @@ class SingleSwitchController(TopoController):
         sw = net.get('s0')
         sw_mac = "08:10:00:00:00:00"
         sw.config(mac = sw_mac)
+        sw_ip = "10.0.1.1"
 
         # ARP
         sw.insertTableEntry(
@@ -97,6 +98,17 @@ class SingleSwitchController(TopoController):
             match_fields={"hdr.arp.oper": 1},
             action_name="TheIngress.arpHandler.forward",
             action_params={"switch_mac": sw_mac}
+        )
+
+        # Switch source details
+        sw.insertTableEntry(
+            table_name="TheIngress.switch_mac_and_ip",
+            default_action="TheIngress.set_switch_mac_and_ip",
+            action_name="TheIngress.set_switch_mac_and_ip",
+            action_params= {
+                "switch_mac": sw_mac,
+                "switch_ip": sw_ip,
+            }
         )
 
         # Controller
@@ -114,7 +126,7 @@ class SingleSwitchController(TopoController):
         for i in range(1, NUM_WORKERS+1):
             sw.insertTableEntry(
                 table_name="TheIngress.ipv4Handler.handler",
-                match_fields={"hdr.ipv4.destinationAddress": [f"10.0.0.{i}", 32]},
+                match_fields={"hdr.ipv4.destinationAddress": [f"10.0.1.{i+1}", 32]},
                 action_name="TheIngress.ipv4Handler.forward",
                 action_params= {
                     "destinationAddress": f"08:00:00:00:0{i}:{i}{i}",

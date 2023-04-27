@@ -1,11 +1,14 @@
 import socket
 import threading
+from mininet.net import Mininet
 
 from python.lib.p4app.src.p4_mininet import P4Host
 from python.config import SDN_CONTROLLER_PORT, BUFFER_SIZE
 
+from python.services.graph import build_graph, get_parent_name
+from python.services.network import generate_mac_lookup
 from python.models.switch import SwitchConnection
-from python.models.packets import SubscriptionPacket
+from python.models.packet import SubscriptionPacket
 
 
 class SDNController(P4Host):
@@ -39,7 +42,13 @@ class SDNController(P4Host):
                 conn, addr = s.accept()
 
                 thread = threading.Thread(target=self._client_thread, args=(conn, addr))
-                thread.start()      
+                thread.start()    
+
+
+    def set_net(self, net: Mininet):
+        self.net = net
+        self.g = build_graph(net)
+        self.mac_look_up = generate_mac_lookup(net)
 
 
     def _client_thread(self, conn, addr):
@@ -62,37 +71,53 @@ class SDNController(P4Host):
         # if not subscribtion packet then skip
 
 
-    def _process(self, data, addr):
+    # def _process(self, data, addr) -> None:
+    def test(self, ip, rank, mgid, sub):
         """
         Method to process the subscription packet
         """
-        
-        # ToDo: get from packet
-        pkt = SubscriptionPacket(data)
-        sub = pkt[SubscriptionPacket].type
-        mgid = pkt[SubscriptionPacket].mgid
+        # pkt = SubscriptionPacket(data)
+        # rank = pkt[SubscriptionPacket].rank
+        # mgid = pkt[SubscriptionPacket].mgid
+        # sub = pkt[SubscriptionPacket].type
 
-        sw_name = "s0"
+        #ip = "10.0.1.2"
+
+        wx = f"w{rank}"
+        port = int(ip.split('.')[-1]) - 1
+
+        sw_name = get_parent_name(self.g, wx)
 
         if sw_name not in self.sw_conns.keys():
-            self.sw_conns[sw_name] = SwitchConnection(connection=self.net.get(sw_name))
+            self._init_sml_switch(sw_name=sw_name, mgid=mgid)
         
-        ip = "10.0.0.1"
-        port = int(ip.split(".")[-1])
-
         conn = self.sw_conns[sw_name]
 
-
-        old_count = conn.mg_ports[mgid].count()
+        old_count = len(conn.mg_ports.get(mgid, []))
         self._mg_entry(conn=conn, mgid=mgid, port=port, subscribe=sub)
 
-        new_count = conn.mg_ports[mgid].count()
+        new_count = len(conn.mg_ports.get(mgid, []))
         self._num_workers_entry(conn=conn, mgid=mgid, old=old_count, new=new_count)
 
-        self._sml_entry(conn=conn, ip=ip, port=port, subscribe=sub)
-        
+        self._sml_entry(sw_name=sw_name,conn=conn, ip=ip, port=port, subscribe=sub)
 
-    def _mg_entry(self, conn: SwitchConnection, mgid: int, port: int, subscribe: bool):
+
+    def _init_sml_switch(self, sw_name: str, mgid: int) -> None:
+        """
+        Method to initialise a new SML switch
+        """
+        self.sw_conns[sw_name] = SwitchConnection(connection=self.net.get(sw_name))
+        self.sw_conns[sw_name].connection.insertTableEntry(
+            table_name="TheIngress.num_workers",
+            match_fields={"hdr.sml.mgid": mgid},
+            action_name="TheIngress.set_num_workers",
+            action_params={
+                "num_workers": 0,
+            },
+        )
+
+
+    def _mg_entry(self, conn: SwitchConnection, mgid: int, port: int, subscribe: bool) -> None:
         """
         Method to Create, Update or Delete multicast entry
         """
@@ -106,7 +131,7 @@ class SDNController(P4Host):
                 conn.connection.updateMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
 
         elif mgid in conn.mgids and port in conn.mg_ports[mgid]:
-            if conn.mg_ports[mgid].count() > 1:
+            if len(conn.mg_ports.get(mgid, [])):
                 conn.mg_ports[mgid].remove(port)
                 conn.connection.updateMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
             else:
@@ -114,13 +139,13 @@ class SDNController(P4Host):
                 del conn.mg_ports[mgid]
 
 
-    def _num_workers_entry(self, conn: SwitchConnection, mgid: int, old: int, new: int):
+    def _num_workers_entry(self, conn: SwitchConnection, mgid: int, old: int, new: int) -> None:
         """
         Method to update the number of workers entry
         """
         if old == new:
             return
-
+        
         conn.connection.removeTableEntry(
             table_name="TheIngress.num_workers",
             match_fields={"hdr.sml.mgid": mgid},
@@ -140,7 +165,7 @@ class SDNController(P4Host):
         )
 
 
-    def _sml_entry(self, conn: SwitchConnection, ip: str, port: int, subscribe: bool):
+    def _sml_entry(self, sw_name: str, conn: SwitchConnection, ip: str, port: int, subscribe: bool) -> None:
         """
         Method to Create or Delete SwitchML entry
         """
@@ -152,7 +177,7 @@ class SDNController(P4Host):
                 match_fields={"standard_metadata.egress_port": port},
                 action_name="TheEgress.smlHandler.forward",
                 action_params={
-                    "worker_mac": self.ip_to_mac.get(ip, "08:00:00:00:00:00"),
+                    "worker_mac": self.mac_look_up[sw_name][port],
                     "worker_ip": ip,
                 },
             )
@@ -164,7 +189,7 @@ class SDNController(P4Host):
                 match_fields={"standard_metadata.egress_port": port},
                 action_name="TheEgress.smlHandler.forward",
                 action_params={
-                    "worker_mac": self.ip_to_mac.get(ip, "08:00:00:00:00:00"),
+                    "worker_mac": self.mac_look_up[sw_name][port],
                     "worker_ip": ip,
                 },
             )

@@ -9,7 +9,7 @@ from python.lib.comm import  unreliable_send, unreliable_receive
 
 from python.services.packet_service import sml_packet_builder, sml_packet_parser
 from python.config import NUM_ITER, CHUNK_SIZE, TIMEOUT, SDN_CONTROLLER_IP, SDN_CONTROLLER_PORT
-from python.models.packets import SubscriptionPacket
+from python.models.packet import SubscriptionPacket, SyncPacket
 
 
 class SMLWorker:
@@ -27,6 +27,8 @@ class SMLWorker:
         self.sdn_ip = params.get("sdn_ip", SDN_CONTROLLER_IP)
         self.sdn_port = params.get("sdn_port", SDN_CONTROLLER_PORT)
 
+        self.ver, self.idx, self.offset = 0, 1, 0
+
 
     def start(self, num_iter: int):
         """
@@ -34,11 +36,14 @@ class SMLWorker:
         """
         #self.initialise()
 
+        Log("Started syncing...")
+        self.sync()
+
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind((f'10.0.0.{int(self.rank+1)}', 12345))
+        s.bind((f'10.0.1.{int(self.rank+2)}', 12345))
         s.settimeout(TIMEOUT) 
         
-        Log("Started...")
+        Log("Started All reduce...")
         for i in range(num_iter):
             num_elem = GenMultipleOfInRange(2, 2048, 2 * CHUNK_SIZE)
             data_out = GenInts(num_elem)
@@ -58,19 +63,48 @@ class SMLWorker:
         self._send_sub_packet(True)
 
 
+    def sync(self):
+        """
+        Method to sync the offset with the switch
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.bind((f'10.0.1.{int(self.rank+2)}', 23456))
+            s.settimeout(TIMEOUT)
+
+            addr = ("10.0.0.0", 65432)
+            pkt = raw(SyncPacket(offset=0))
+
+            while 1:
+                unreliable_send(s, pkt, addr)
+
+                try: 
+                    pkt, _ = unreliable_receive(s, 2048)
+                    break
+                except socket.timeout:
+                    Log("Time out")
+
+            pkt = SyncPacket(pkt)
+            self.offset = pkt[SyncPacket].offset
+
+        if self.offset != 0:
+            n = int(self.offset/CHUNK_SIZE)
+            self.idx = n+1
+            self.ver = n & 1
+
+            
+
     def all_reduce(self, soc, data, result):
         """
         Method that preforms the in-network all reduce over UDP
         """
         addr = ("10.0.0.0", 54321)
-        ver, idx, offset, packet = 0, 0, 0, 0
-        idx = 1
+        #result = data
 
-        while offset < len(data):
-            packet = sml_packet_builder(self.rank, ver, idx, offset, self.mgid, data[offset:offset+CHUNK_SIZE])
+        while self.offset < len(data):
+            packet = sml_packet_builder(self.rank, self.ver, self.idx, self.offset, self.mgid, data[self.offset:self.offset+CHUNK_SIZE])
             while(1):
                 unreliable_send(soc, packet, addr)
-                Log(f"Sending: {idx}, VER: {ver}")
+                Log(f"Sending: {self.idx}, VER: {self.ver}")
 
                 try:
                     packet, _ = unreliable_receive(soc, 2048)
@@ -79,7 +113,7 @@ class SMLWorker:
                 except socket.timeout:
                     Log("Time out")
 
-            offset, idx, ver = sml_packet_parser(packet, result)
+            self.offset, self.idx, self.ver = sml_packet_parser(packet, result)
 
         Log(f'final-result: {result}')
 
@@ -95,7 +129,7 @@ class SMLWorker:
         """
         Method to send a subscription packet over TCP
         """
-        pkt = raw(SubscriptionPacket(aggregation_id=self.aggregation_id, 
+        pkt = raw(SubscriptionPacket(aggregation_id=self.mgid, 
                                      type=int(subscribe)))
         
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

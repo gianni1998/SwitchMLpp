@@ -40,5 +40,22 @@ control TheChecksumComputation(inout headers  hdr, inout metadata meta) {
       hdr.udp.checksum,
       HashAlgorithm.csum16
     );
+
+    update_checksum(
+      hdr.sync.isValid(),
+      {
+        hdr.ipv4.sourceAddress,
+        hdr.ipv4.destinationAddress,
+        (bit<8>) 0x00,
+        hdr.ipv4.protocol,
+        hdr.udp.hdrlength,
+        hdr.udp.srcPort,
+        hdr.udp.dstPort,
+        hdr.udp.hdrlength,
+        hdr.sync
+      },
+      hdr.udp.checksum,
+      HashAlgorithm.csum16
+    );
   }
 }

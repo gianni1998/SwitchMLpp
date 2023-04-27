@@ -2,7 +2,7 @@ from scapy.all import raw
 
 from python.lib.worker import Log
 from python.config import CHUNK_SIZE, SWITCH_ML_PACKET_SIZE
-from python.models.packets import SwitchMLPacket, DataPacket
+from python.models.packet import SwitchMLPacket, DataPacket
 
 
 def sml_packet_builder(wid, ver, idx, offset, mgid, vector):

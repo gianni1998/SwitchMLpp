@@ -5,7 +5,7 @@
 #include "sml/worker_counter.p4"
 #include "sml/aggregator.p4"
 #include "sml/overseer.p4"
-
+#include "sml/synchroniser.p4"
 
 control TheIngress(inout headers hdr,
                    inout metadata meta,
@@ -16,6 +16,7 @@ control TheIngress(inout headers hdr,
 
   Overseer() overseer;
   WorkerCounter() workerCounter;
+  Synchroniser() syncer;
 
   Aggregator() aggValue00;
   Aggregator() aggValue01;
@@ -94,7 +95,8 @@ control TheIngress(inout headers hdr,
     if (hdr.arp.isValid()) {
       arpHandler.apply(hdr, standard_metadata);
     } else if (hdr.sml.isValid()) {
-
+      
+      syncer.apply(hdr, 0);
       num_workers.apply();
       bit<32> idx = 0;
 
@@ -137,8 +139,6 @@ control TheIngress(inout headers hdr,
       aggValue31.apply(hdr.data.value31, idx, hdr.sml.ver, meta);
 
       if (meta.count == 0) {
-        switch_mac_and_ip.apply();
-
         if (meta.seen == 0) {
           multicast();
         } else {
@@ -148,8 +148,15 @@ control TheIngress(inout headers hdr,
         drop();
       }
 
+    } else if (hdr.sync.isValid()) {
+      syncer.apply(hdr, 1);
+      reply();
     } else if (hdr.ipv4.isValid()) {
       ipv4Handler.apply(hdr, standard_metadata);
+    } 
+
+    if (hdr.sync.isValid() || (hdr.sml.isValid() && meta.count == 0)) {
+      switch_mac_and_ip.apply();
     }
   }
 }

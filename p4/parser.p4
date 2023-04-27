@@ -37,7 +37,8 @@ parser TheParser(packet_in packet,
   state parseUdp { 
     packet.extract(hdr.udp);
     transition select(hdr.udp.dstPort) {
-      sml_udp_port: parseSML;
+      udp_port_t.sml: parseSML;
+      udp_port_t.sync: parseSync;
       default: accept; 
     }
   }
@@ -49,6 +50,11 @@ parser TheParser(packet_in packet,
 
   state parseData {
     packet.extract(hdr.data);
+    transition accept;
+  }
+
+  state parseSync {
+    packet.extract(hdr.sync);
     transition accept;
   }
 }

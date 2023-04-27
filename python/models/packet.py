@@ -54,7 +54,14 @@ class DataPacket(Packet):
 class SubscriptionPacket(Packet):
     name = "SubscriptionPacket"
     fields_desc = [
+        BitField("rank", 0, 32),
         BitField("mgid", 0, 32),
-        BitField("type", 0, 32),
+        BitField("type", 0, 32)
     ]
 
+
+class SyncPacket(Packet):
+    name = "SyncPacket"
+    fields_desc = [
+        BitField("offset", 0, 32)
+    ]
