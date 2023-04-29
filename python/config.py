@@ -6,6 +6,9 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 NUM_PORTS = 4
 NUM_WORKERS = 2
 
+TREE_DEPTH = 2
+TREE_FANOUT = 2
+
 # Worker
 NUM_ITER   = 1
 CHUNK_SIZE = 32  

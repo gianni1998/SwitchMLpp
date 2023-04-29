@@ -1,8 +1,10 @@
 from mininet.topo import Topo
 from mininet.util import macColonHex
 
+from mininet.topolib import TreeTopo
+
 from python.sdn_controller import SDNController
-from python.config import NUM_WORKERS, SDN_CONTROLLER_IP, SDN_CONTROLLER_MAC
+from python.config import NUM_WORKERS, SDN_CONTROLLER_IP, SDN_CONTROLLER_MAC, TREE_DEPTH, TREE_FANOUT
 
 
 class Lab5Topo(Topo):
@@ -41,34 +43,25 @@ class TreeTopo(Topo):
     def __init__(self, **params):
         Topo.__init__(self, **params)
 
-        depth = params.get("depth", 1)
+        self.s = 0
+        self.leafs = []
+
+        depth = params.get("depth", TREE_DEPTH)
+        fanout = params.get("fanout", TREE_FANOUT)
 
         if depth > 3 or depth < 1:
             raise ValueError("Depth not supported")
-
-        fanout = 2
-        s = 1
+        
+        self.__add_tree(depth=depth-1, fanout=fanout)
 
         s0 = self.addSwitch(name="s0")
         c0 = self.addHost(name="c0", ip=SDN_CONTROLLER_IP, mac=SDN_CONTROLLER_MAC, cls=SDNController)
         self.addLink(s0, c0, port1=0)
-        
-        switches = [s0]
-        for i in range(0, depth):
-            top = switches.pop(0)
-            for j in range(1, fanout+1):
-                leaf = self.addSwitch(name=f"s{s}")
-                s += 1
 
-                switches.append(leaf)
-                self.addLink(top, leaf, port1=j, port2=0)
+        w, i, pod, in_pod = 0, 0, 0, 1 
 
-        w = 0
-        in_pod = 1
-        pod = 0
-        i = 0
-        while len(switches) > 0:
-            sw = switches.pop(0)
+        while len(self.leafs) > 0:
+            sw = self.leafs.pop(0)
 
             if (in_pod >= fanout**2):
                 pod += 1
@@ -84,4 +77,18 @@ class TreeTopo(Topo):
                 self.addLink(sw, wx, port1=j, port2=0)
 
             i += 1
+    
+
+    def __add_tree(self, depth, fanout):
+        node = self.addSwitch(name=f"s{self.s}")
+        self.s += 1
+
+        if depth > 0:
+            for i in range(1, fanout+1):
+                leaf = self.__add_tree( depth - 1, fanout )
+                self.addLink(node, leaf, port1=i, port2=0)
+        else:
+            self.leafs.append(node)
+
+        return node
                 

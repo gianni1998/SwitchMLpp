@@ -3,7 +3,7 @@ from mininet.util import macColonHex
 
 from python.lib.p4app.src.p4app import P4Mininet
 
-from python.config import NUM_WORKERS, SDN_CONTROLLER_IP, SDN_CONTROLLER_MAC
+from python.config import NUM_WORKERS, SDN_CONTROLLER_IP, SDN_CONTROLLER_MAC, TREE_DEPTH, TREE_FANOUT
 from python.services.network import generate_mac_lookup
 
 
@@ -134,8 +134,8 @@ class SingleSwitchConfig(TopoConfig):
 class TreeTopoConfig(TopoConfig):
 
     def __init__(self, **params):
-        self.depth = params.get("depth", 2)
-        self.fanout = params.get("fanout", 2)
+        self.depth = params.get("depth", TREE_DEPTH)
+        self.fanout = params.get("fanout", TREE_FANOUT)
         
     def run_control_plane(self, net: P4Mininet):
         # Set mac
@@ -146,7 +146,6 @@ class TreeTopoConfig(TopoConfig):
             n += 1
 
         lookup = generate_mac_lookup(net)
-        print(lookup)
 
         s0 = net.get("s0")
         self.switch_entry(sw=s0, ip="10.0.2.1")
@@ -154,7 +153,6 @@ class TreeTopoConfig(TopoConfig):
 
         for i in range(1, self.fanout+1):
             self.ipv4_entry(sw=s0, ip=[f"10.0.{i-1}.0", 24], mac=lookup[s0.name][i], port=i)
-
 
         for i in range(0, self.fanout):
             sw = net.get(f"s{i+1}")
