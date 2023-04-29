@@ -4,7 +4,7 @@ from typing import List, Dict
 from python.lib.p4app.src.p4_mininet import P4RuntimeSwitch
 
 @dataclass
-class SwitchConnection:
+class SwitchConnectionInfo:
 
     connection: P4RuntimeSwitch
     """Connection to the switch"""

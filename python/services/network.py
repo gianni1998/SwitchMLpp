@@ -13,6 +13,9 @@ def generate_mac_lookup(net: Mininet) -> Dict[str, Dict[int, str]]:
             lookup[sw.name] = {}
 
         for k, v in sw.intfs.items():
-            lookup[sw.name][k] = v.link.intf2.node.MAC()
+            if sw.name != "s0" and k == 0:
+                lookup[sw.name][k] = v.link.intf1.node.MAC()
+            else:
+                lookup[sw.name][k] = v.link.intf2.node.MAC()
     
     return lookup

@@ -7,7 +7,7 @@ from python.config import SDN_CONTROLLER_PORT, BUFFER_SIZE
 
 from python.services.graph import build_graph, get_parent_name
 from python.services.network import generate_mac_lookup
-from python.models.switch import SwitchConnection
+from python.models.switch import SwitchConnectionInfo
 from python.models.packet import SubscriptionPacket
 
 
@@ -106,7 +106,7 @@ class SDNController(P4Host):
         """
         Method to initialise a new SML switch
         """
-        self.sw_conns[sw_name] = SwitchConnection(connection=self.net.get(sw_name))
+        self.sw_conns[sw_name] = SwitchConnectionInfo(connection=self.net.get(sw_name))
         self.sw_conns[sw_name].connection.insertTableEntry(
             table_name="TheIngress.num_workers",
             match_fields={"hdr.sml.mgid": mgid},
@@ -117,7 +117,7 @@ class SDNController(P4Host):
         )
 
 
-    def _mg_entry(self, conn: SwitchConnection, mgid: int, port: int, subscribe: bool) -> None:
+    def _mg_entry(self, conn: SwitchConnectionInfo, mgid: int, port: int, subscribe: bool) -> None:
         """
         Method to Create, Update or Delete multicast entry
         """
@@ -139,7 +139,7 @@ class SDNController(P4Host):
                 del conn.mg_ports[mgid]
 
 
-    def _num_workers_entry(self, conn: SwitchConnection, mgid: int, old: int, new: int) -> None:
+    def _num_workers_entry(self, conn: SwitchConnectionInfo, mgid: int, old: int, new: int) -> None:
         """
         Method to update the number of workers entry
         """
@@ -165,7 +165,7 @@ class SDNController(P4Host):
         )
 
 
-    def _sml_entry(self, sw_name: str, conn: SwitchConnection, ip: str, port: int, subscribe: bool) -> None:
+    def _sml_entry(self, sw_name: str, conn: SwitchConnectionInfo, ip: str, port: int, subscribe: bool) -> None:
         """
         Method to Create or Delete SwitchML entry
         """
@@ -193,5 +193,3 @@ class SDNController(P4Host):
                     "worker_ip": ip,
                 },
             )
-
-        
