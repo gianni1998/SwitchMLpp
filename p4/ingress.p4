@@ -85,10 +85,10 @@ control TheIngress(inout headers hdr,
         key = { hdr.sml.mgid: exact; }
         actions = {
             set_num_workers;
-            NoAction;
+            reply;
         }
         size = 1024;
-        default_action = NoAction();
+        default_action = reply();
     }
 
   apply {

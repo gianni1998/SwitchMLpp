@@ -4,7 +4,7 @@ from mininet.util import macColonHex
 from python.lib.p4app.src.p4app import P4Mininet
 
 from python.config import NUM_WORKERS, SDN_CONTROLLER_IP, SDN_CONTROLLER_MAC, TREE_DEPTH, TREE_FANOUT
-from python.services.network import generate_mac_lookup
+from python.services.network import mac_lookup
 
 
 class TopoConfig(ABC):
@@ -17,9 +17,21 @@ class TopoConfig(ABC):
         pass
 
 
+    def arp_entry(self, sw, ip):
+        """"
+        Method to add ARP entry to the contol plane
+        """
+        sw.insertTableEntry(
+            table_name="TheIngress.arpHandler.handler",
+            match_fields={"hdr.arp.tpa": ip},
+            action_name="TheIngress.arpHandler.forward",
+            action_params={"switch_mac": sw.MAC()}
+        )
+
+
     def switch_entry(self, sw, ip):
         """
-        Mathod to add switch information to control plane
+        Mathod to add switch information to the control plane
         """
         sw.insertTableEntry(
             table_name="TheIngress.switch_mac_and_ip",
@@ -34,7 +46,7 @@ class TopoConfig(ABC):
 
     def ipv4_entry(self, sw, ip, mac, port):
         """
-        Mathod to add ipv4 forwarding entry to control plane
+        Mathod to add ipv4 forwarding entry to the control plane
         """
         sw.insertTableEntry(
             table_name="TheIngress.ipv4Handler.handler",
@@ -56,15 +68,10 @@ class Lab5Config(TopoConfig):
         sw_ip = "10.0.1.1"
         sw.config(mac = sw_mac)
 
-        lookup = generate_mac_lookup(net)
+        lookup = mac_lookup(net)
 
         # ARP
-        sw.insertTableEntry(
-            table_name="TheIngress.arpHandler.handler",
-            match_fields={"hdr.arp.oper": 1},
-            action_name="TheIngress.arpHandler.forward",
-            action_params={"switch_mac": sw_mac}
-        )
+        self.arp_entry(sw=sw, ip="10.0.0.0")
 
         # Multicast
         multicast_group_id = 1
@@ -110,15 +117,10 @@ class SingleSwitchConfig(TopoConfig):
         sw.config(mac = sw_mac)
         sw_ip = "10.0.1.1"
 
-        lookup = generate_mac_lookup(net)
+        lookup = mac_lookup(net)
 
         # ARP
-        sw.insertTableEntry(
-            table_name="TheIngress.arpHandler.handler",
-            match_fields={"hdr.arp.oper": 1},
-            action_name="TheIngress.arpHandler.forward",
-            action_params={"switch_mac": sw_mac}
-        )
+        self.arp_entry(sw=sw, ip="10.0.0.0")
 
         # Switch source details
         self.switch_entry(sw=sw, ip=sw_ip)
@@ -145,9 +147,10 @@ class TreeTopoConfig(TopoConfig):
             sw.config(mac = mac)
             n += 1
 
-        lookup = generate_mac_lookup(net)
+        lookup = mac_lookup(net)
 
         s0 = net.get("s0")
+        self.arp_entry(sw=s0, ip="10.0.0.0")
         self.switch_entry(sw=s0, ip="10.0.2.1")
         self.ipv4_entry(sw=s0, ip=[SDN_CONTROLLER_IP, 32], mac=SDN_CONTROLLER_MAC, port=0)
 
@@ -156,8 +159,9 @@ class TreeTopoConfig(TopoConfig):
 
         for i in range(0, self.fanout):
             sw = net.get(f"s{i+1}")
-            self.switch_entry(sw=sw, ip=f"10.0.{i}.1")
 
+            self.arp_entry(sw=sw, ip="10.0.0.0")
+            self.switch_entry(sw=sw, ip=f"10.0.{i}.1")
             self.ipv4_entry(sw=sw, ip=["10.0.0.0", 8], mac=lookup[sw.name][0], port=0)
 
             for j in range(2, self.fanout+2):

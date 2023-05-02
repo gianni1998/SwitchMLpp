@@ -1,5 +1,7 @@
 import networkx as nx
 
+from typing import List
+
 from mininet.net import Mininet
 
 
@@ -27,14 +29,21 @@ def build_graph(net: Mininet) -> nx.Graph:
     return g
 
 
-def lca(graph: nx.Graph, src: str, dst: str) -> str:
+def get_lca(graph: nx.Graph, src: str, dst: str) -> str:
     """
     Find the lowest common ancestor between two nodes
     """
-    path = nx.dijkstra_path_length(G=graph, source=src, target=dst)
+    path = nx.dijkstra_path(G=graph, source=src, target=dst)[1:] # Remove self
     n = len(path)
 
     return path[int(n/2)]
+
+
+def get_shortest_path(graph: nx.Graph, src: str, dst: str) -> List[str]:
+    """
+    Method to get the shortest path between two nodes
+    """
+    return nx.dijkstra_path(G=graph, source=src, target=dst)[1:] # Remove self
 
 
 def get_parent_name(graph: nx.Graph, node: str) -> str:
@@ -45,4 +54,4 @@ def get_parent_name(graph: nx.Graph, node: str) -> str:
         if node in edge:
             return edge[1] if edge[0] == node else edge[0]
         
-    return ""
+    raise ValueError(f"Unable to find parrent for node: {node}")

@@ -19,7 +19,7 @@ control ARPHandler(inout headers hdr,
     }
 
     table handler {
-        key = { hdr.arp.oper: exact; }
+        key = { hdr.arp.tpa: exact; }
         actions = {
             forward;
             NoAction;

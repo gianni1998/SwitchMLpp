@@ -1,20 +1,31 @@
 import socket
 import threading
+import networkx as nx
+
+from typing import Dict, List
 from mininet.net import Mininet
 
 from python.lib.p4app.src.p4_mininet import P4Host
 from python.config import SDN_CONTROLLER_PORT, BUFFER_SIZE
 
-from python.services.graph import build_graph, get_parent_name
-from python.services.network import generate_mac_lookup
+from python.services.graph import build_graph, get_parent_name, get_shortest_path, get_lca
+from python.services.network import mac_lookup, port_lookup, ip_lookup
 from python.models.switch import SwitchConnectionInfo
 from python.models.packet import SubscriptionPacket
+
+from python.controller.state import AbstractState
 
 
 class SDNController(P4Host):
     """
     Class that simulates a SDN controller for a P4 switch
     """
+    g: nx.Graph
+    net: Mininet
+    conn_infos: Dict[str, SwitchConnectionInfo]
+    mac_lookup: Dict[str, Dict[int, str]]
+    port_lookup: Dict[str, Dict[str, int]]
+
 
     def __init__(self, name, **params):
         """
@@ -22,16 +33,25 @@ class SDNController(P4Host):
         """
         P4Host.__init__(self, name, **params)
 
-        self.sw_conns = {}
-        self.net = None
-        self.g = None
-        self.ip_to_mac = {}
+        self.conn_infos = {}
+
+
+    def set_net(self, net: Mininet):
+        """
+        Method to set Mininet object that is used for the switch connections
+        """
+        self.net = net
+        self.g = build_graph(net)
+        self.mac_lookup = mac_lookup(net)
+        self.ip_lookup = ip_lookup()
+        self.port_lookup = port_lookup(net)
 
 
     def start(self):
         """
         Method to open a tcp connection and listen for incomming traffic
         """
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             #s.setsockopt(socket.SOL_SOCKET, 25, str("eth0" + '\0').encode('utf-8'))
 
@@ -41,14 +61,11 @@ class SDNController(P4Host):
             while 1:
                 conn, addr = s.accept()
 
+                print(conn)
+                print(addr)
+
                 thread = threading.Thread(target=self._client_thread, args=(conn, addr))
                 thread.start()    
-
-
-    def set_net(self, net: Mininet):
-        self.net = net
-        self.g = build_graph(net)
-        self.mac_look_up = generate_mac_lookup(net)
 
 
     def _client_thread(self, conn, addr):
@@ -68,128 +85,173 @@ class SDNController(P4Host):
 
         self._process(data, addr)
 
-        # if not subscribtion packet then skip
 
-
-    # def _process(self, data, addr) -> None:
-    def test(self, ip, rank, mgid, sub):
+    # def _process(data, addr):
+    def test3(self, rank: int, mgid: int, sub: bool) -> None:
         """
-        Method to process the subscription packet
+        Method to update switch control planes accordingly
         """
-        # pkt = SubscriptionPacket(data)
-        # rank = pkt[SubscriptionPacket].rank
-        # mgid = pkt[SubscriptionPacket].mgid
-        # sub = pkt[SubscriptionPacket].type
-
-        #ip = "10.0.1.2"
-
-        wx = f"w{rank}"
-        port = int(ip.split('.')[-1]) - 1
-
-        sw_name = get_parent_name(self.g, wx)
-
-        if sw_name not in self.sw_conns.keys():
-            self._init_sml_switch(sw_name=sw_name, mgid=mgid)
+        # Todo: refactor, clean and optimise this monstrosity of a function
         
-        conn = self.sw_conns[sw_name]
+        prev = wx = f"w{rank}"
+        lca = None
+        
+        target = next((x for x in self.conn_infos if mgid in self.conn_infos[x].mgids), None)
 
-        old_count = len(conn.mg_ports.get(mgid, []))
-        self._mg_entry(conn=conn, mgid=mgid, port=port, subscribe=sub)
+        # Check if group exists
+        if target:
+            switches = path = get_shortest_path(graph=self.g, src=wx, dst=target)
+            
+            if len(switches) > 1:
+                lca = get_lca(graph=self.g, src=wx, dst=target)
+                switches = switches[:-1] # last switch in list should aready be initialised in this case
+        else:
+            switches = [get_parent_name(graph=self.g, node=wx)]
 
-        new_count = len(conn.mg_ports.get(mgid, []))
-        self._num_workers_entry(conn=conn, mgid=mgid, old=old_count, new=new_count)
+        for i, sw in enumerate(switches): 
 
-        self._sml_entry(sw_name=sw_name,conn=conn, ip=ip, port=port, subscribe=sub)
+            if sw not in self.conn_infos.keys():
+                self.conn_infos[sw] = SwitchConnectionInfo(connection=self.net.get(sw))
 
+            # If lca then we should check two ports
+            if sw == lca:
+                l = self.port_lookup[sw][prev]
+                r = self.port_lookup[sw][path[i+1]]
 
-    def _init_sml_switch(self, sw_name: str, mgid: int) -> None:
-        """
-        Method to initialise a new SML switch
-        """
-        self.sw_conns[sw_name] = SwitchConnectionInfo(connection=self.net.get(sw_name))
-        self.sw_conns[sw_name].connection.insertTableEntry(
-            table_name="TheIngress.num_workers",
-            match_fields={"hdr.sml.mgid": mgid},
-            action_name="TheIngress.set_num_workers",
-            action_params={
-                "num_workers": 0,
-            },
-        )
-
-
-    def _mg_entry(self, conn: SwitchConnectionInfo, mgid: int, port: int, subscribe: bool) -> None:
-        """
-        Method to Create, Update or Delete multicast entry
-        """
-        if subscribe:
-            if mgid not in conn.mgids:
-                conn.mgids.append(mgid)
-                conn.mg_ports[mgid] = [port]
-                conn.connection.addMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
-            elif port not in conn.mg_ports[mgid]:
-                conn.mg_ports[mgid].append(port)
-                conn.connection.updateMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
-
-        elif mgid in conn.mgids and port in conn.mg_ports[mgid]:
-            if len(conn.mg_ports.get(mgid, [])):
-                conn.mg_ports[mgid].remove(port)
-                conn.connection.updateMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
+                ports = [l, r]
             else:
-                conn.connection.deleteMulticastGroup(mgid=mgid, ports=conn.mg_ports[mgid])
-                del conn.mg_ports[mgid]
+                ports = [self.port_lookup[sw][prev]]
 
+            for port in ports:
+                ip = self.ip_lookup[sw][port]
 
-    def _num_workers_entry(self, conn: SwitchConnectionInfo, mgid: int, old: int, new: int) -> None:
-        """
-        Method to update the number of workers entry
-        """
-        if old == new:
-            return
-        
-        conn.connection.removeTableEntry(
-            table_name="TheIngress.num_workers",
-            match_fields={"hdr.sml.mgid": mgid},
-            action_name="TheIngress.set_num_workers",
-            action_params={
-                "num_workers": old,
-            },
-        )
+                if sub:
 
-        conn.connection.insertTableEntry(
-            table_name="TheIngress.num_workers",
-            match_fields={"hdr.sml.mgid": mgid},
-            action_name="TheIngress.set_num_workers",
-            action_params={
-                "num_workers": new,
-            },
-        )
+                    # Create
+                    if mgid not in self.conn_infos[sw].mgids:
 
+                        # Multicast group
+                        self.conn_infos[sw].mgids.append(mgid)
+                        self.conn_infos[sw].mg_ports[mgid] = [port]
+                        self.conn_infos[sw].connection.addMulticastGroup(mgid=mgid, ports=self.conn_infos[sw].mg_ports[mgid])
 
-    def _sml_entry(self, sw_name: str, conn: SwitchConnectionInfo, ip: str, port: int, subscribe: bool) -> None:
-        """
-        Method to Create or Delete SwitchML entry
-        """
-        if subscribe and ip not in conn.connected_ip:
-            conn.connected_ip.append(ip)
+                        # Worker count
+                        self.conn_infos[sw].connection.insertTableEntry(
+                            table_name="TheIngress.num_workers",
+                            match_fields={"hdr.sml.mgid": mgid},
+                            action_name="TheIngress.set_num_workers",
+                            action_params={
+                                "num_workers": len(self.conn_infos[sw].mg_ports[mgid]),
+                            },
+                        )
 
-            conn.connection.insertTableEntry(
-                table_name="TheEgress.smlHandler.handler",
-                match_fields={"standard_metadata.egress_port": port},
-                action_name="TheEgress.smlHandler.forward",
-                action_params={
-                    "worker_mac": self.mac_look_up[sw_name][port],
-                    "worker_ip": ip,
-                },
-            )
-        elif not subscribe and ip in conn.connected_ip:
-            conn.connected_ip.remove(ip)
+                        # SwitchML
+                        self.conn_infos[sw].connected_ip.append(ip)
+                        self.conn_infos[sw].connection.insertTableEntry(
+                            table_name="TheEgress.smlHandler.handler",
+                            match_fields={"standard_metadata.egress_port": port},
+                            action_name="TheEgress.smlHandler.forward",
+                            action_params={
+                                "worker_mac": self.mac_lookup[sw][port],
+                                "worker_ip": ip,
+                            },
+                        )
+                    
+                    # Update
+                    elif mgid in self.conn_infos[sw].mgids:
 
-            conn.connection.removeTableEntry(
-                table_name="TheEgress.smlHandler.handler",
-                match_fields={"standard_metadata.egress_port": port},
-                action_name="TheEgress.smlHandler.forward",
-                action_params={
-                    "worker_mac": self.mac_look_up[sw_name][port],
-                    "worker_ip": ip,
-                },
-            )
+                        if ip not in self.conn_infos[sw].connected_ip:
+                            # Multicast group
+                            self.conn_infos[sw].mg_ports[mgid].append(port)
+                            self.conn_infos[sw].connection.updateMulticastGroup(mgid=mgid, ports=self.conn_infos[sw].mg_ports[mgid])
+
+                            # Worker count
+                            self.conn_infos[sw].connection.removeTableEntry(
+                                table_name="TheIngress.num_workers",
+                                match_fields={"hdr.sml.mgid": mgid},
+                                action_name="TheIngress.set_num_workers",
+                                action_params={
+                                    "num_workers": len(self.conn_infos[sw].mg_ports[mgid]) - 1,
+                                },
+                            )
+
+                            self.conn_infos[sw].connection.insertTableEntry(
+                                table_name="TheIngress.num_workers",
+                                match_fields={"hdr.sml.mgid": mgid},
+                                action_name="TheIngress.set_num_workers",
+                                action_params={
+                                    "num_workers": len(self.conn_infos[sw].mg_ports[mgid]),
+                                },
+                            )
+
+                            # SwitchML
+                            self.conn_infos[sw].connected_ip.append(ip)
+                            self.conn_infos[sw].connection.insertTableEntry(
+                                table_name="TheEgress.smlHandler.handler",
+                                match_fields={"standard_metadata.egress_port": port},
+                                action_name="TheEgress.smlHandler.forward",
+                                action_params={
+                                    "worker_mac": self.mac_lookup[sw][port],
+                                    "worker_ip": ip,
+                                },
+                            )
+                
+                else:
+
+                    # Delete
+                    if mgid not in self.conn_infos[sw].mgids or port not in self.conn_infos[sw].mg_ports[mgid]:
+                        continue
+                    
+                    if len(self.conn_infos[sw].mg_ports[mgid]) > 1:
+                        # Multicast group
+                        self.conn_infos[sw].mg_ports[mgid].remove(port)
+                        self.conn_infos[sw].connection.updateMulticastGroup(mgid=mgid, ports=self.conn_infos[sw].mg_ports[mgid])
+
+                        # Worker count
+                        self.conn_infos[sw].connection.removeTableEntry(
+                            table_name="TheIngress.num_workers",
+                            match_fields={"hdr.sml.mgid": mgid},
+                            action_name="TheIngress.set_num_workers",
+                            action_params={
+                                "num_workers": len(self.conn_infos[sw].mg_ports[mgid]) + 1,
+                            },
+                        )
+
+                        self.conn_infos[sw].connection.insertTableEntry(
+                            table_name="TheIngress.num_workers",
+                            match_fields={"hdr.sml.mgid": mgid},
+                            action_name="TheIngress.set_num_workers",
+                            action_params={
+                                "num_workers": len(self.conn_infos[sw].mg_ports[mgid]),
+                            },
+                        )
+
+                    else:
+                        # Multicast group
+                        self.conn_infos[sw].mgids.remove(mgid)
+                        self.conn_infos[sw].connection.deleteMulticastGroup(mgid=mgid, ports=self.conn_infos[sw].mg_ports[mgid])
+                        del self.conn_infos[sw].mg_ports[mgid]
+
+                        # Worker count
+                        self.conn_infos[sw].connection.removeTableEntry(
+                            table_name="TheIngress.num_workers",
+                            match_fields={"hdr.sml.mgid": mgid},
+                            action_name="TheIngress.set_num_workers",
+                            action_params={
+                                "num_workers": 1,
+                            },
+                        )
+
+                    # SwitchML
+                    self.conn_infos[sw].connected_ip.remove(ip)
+                    self.conn_infos[sw].connection.removeTableEntry(
+                        table_name="TheEgress.smlHandler.handler",
+                        match_fields={"standard_metadata.egress_port": port},
+                        action_name="TheEgress.smlHandler.forward",
+                        action_params={
+                            "worker_mac": self.mac_lookup[sw][port],
+                            "worker_ip": ip,
+                        },
+                    )
+                    
+            prev = sw

@@ -1,4 +1,5 @@
 import socket
+import netifaces
 from scapy.all import raw
 
 import python.lib.config
@@ -21,6 +22,8 @@ class SMLWorker:
         """
         Constructor
         """
+        self.ip = netifaces.ifaddresses("eth0")[netifaces.AF_INET][0]["addr"]
+
         self.rank = rank
         self.mgid = params.get("mgid", 1)
 
@@ -40,7 +43,7 @@ class SMLWorker:
         self.sync()
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind((f'10.0.1.{int(self.rank+2)}', 12345))
+        s.bind((self.ip, 12345))
         s.settimeout(TIMEOUT) 
         
         Log("Started All reduce...")
@@ -68,7 +71,7 @@ class SMLWorker:
         Method to sync the offset with the switch
         """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.bind((f'10.0.1.{int(self.rank+2)}', 23456))
+            s.bind((self.ip, 23456))
             s.settimeout(TIMEOUT)
 
             addr = ("10.0.0.0", 65432)

@@ -11,12 +11,13 @@ def build_mini_net(config: TopoConfig, topo: Topo, use_sdn: bool):
     net = P4Mininet(program="p4/main.p4", topo=topo)
     net.run_control_plane = lambda: config.run_control_plane(net)
 
+    net.start()
+    net.run_control_plane()
+
     if use_sdn:
         c0 = net.get("c0")
         c0.set_net(net)
 
-    net.start()
-    net.run_control_plane()
     CLI(net)
     net.stop()
 
