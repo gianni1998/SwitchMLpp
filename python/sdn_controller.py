@@ -148,9 +148,9 @@ class SDNController(P4Host):
                         # SwitchML
                         self.conn_infos[sw].connected_ip.append(ip)
                         self.conn_infos[sw].connection.insertTableEntry(
-                            table_name="TheEgress.smlHandler.handler",
+                            table_name="TheEgress.sml_handler",
                             match_fields={"standard_metadata.egress_port": port},
-                            action_name="TheEgress.smlHandler.forward",
+                            action_name="TheEgress.sml_forward",
                             action_params={
                                 "worker_mac": self.mac_lookup[sw][port],
                                 "worker_ip": ip,
@@ -187,9 +187,9 @@ class SDNController(P4Host):
                             # SwitchML
                             self.conn_infos[sw].connected_ip.append(ip)
                             self.conn_infos[sw].connection.insertTableEntry(
-                                table_name="TheEgress.smlHandler.handler",
+                                table_name="TheEgress.sml_handler",
                                 match_fields={"standard_metadata.egress_port": port},
-                                action_name="TheEgress.smlHandler.forward",
+                                action_name="TheEgress.sml_forward",
                                 action_params={
                                     "worker_mac": self.mac_lookup[sw][port],
                                     "worker_ip": ip,
@@ -245,9 +245,9 @@ class SDNController(P4Host):
                     # SwitchML
                     self.conn_infos[sw].connected_ip.remove(ip)
                     self.conn_infos[sw].connection.removeTableEntry(
-                        table_name="TheEgress.smlHandler.handler",
+                        table_name="TheEgress.sml_handler",
                         match_fields={"standard_metadata.egress_port": port},
-                        action_name="TheEgress.smlHandler.forward",
+                        action_name="TheEgress.sml_forward",
                         action_params={
                             "worker_mac": self.mac_lookup[sw][port],
                             "worker_ip": ip,

@@ -43,7 +43,7 @@ class SMLWorker:
         self.sync()
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind((self.ip, 12345))
+        s.bind((self.ip, 54321))
         s.settimeout(TIMEOUT) 
         
         Log("Started All reduce...")
@@ -71,7 +71,7 @@ class SMLWorker:
         Method to sync the offset with the switch
         """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.bind((self.ip, 23456))
+            s.bind((self.ip, 65432))
             s.settimeout(TIMEOUT)
 
             addr = ("10.0.0.0", 65432)

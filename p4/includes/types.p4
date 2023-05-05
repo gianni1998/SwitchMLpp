@@ -36,6 +36,7 @@ struct metadata {
     bit<32> count;
     bit<32> idx;
     bit<32> numWorkers;
+    bit<1> nextStep;
 }
 
 #endif

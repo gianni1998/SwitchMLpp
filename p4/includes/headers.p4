@@ -48,8 +48,9 @@ header sml_t {
   bit<32> ver;
   bit<32> idx;
   bit<32> offset;
-  bit<32> mgid;
+  bit<16> mgid;
   bit<32> size;
+  bit<32> type;
 }
 
 header data_t {
