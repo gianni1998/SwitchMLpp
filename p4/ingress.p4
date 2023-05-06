@@ -11,7 +11,6 @@ control TheIngress(inout headers hdr,
                    inout standard_metadata_t standard_metadata) {
 
   IPv4Handler() ipv4Handler;
-  IPv4Handler() ipv4Handler2;
   ARPHandler() arpHandler;
   AggregationHandler() aggregationHandler;
 
@@ -105,6 +104,17 @@ control TheIngress(inout headers hdr,
           workerCounter.apply(hdr, meta, idx);
         }
 
+        if (hdr.sml.type == 1) {
+          // Reply from switch, so send down
+          multicast();
+
+          // Manupulate values to override local agg values
+          meta.count = 1;
+        }
+
+        // Do aggregation logic
+        aggregationHandler.apply(hdr, meta, idx);
+
         if (hdr.sml.type == 0) {
 
           if (meta.count == 0) {
@@ -117,24 +127,11 @@ control TheIngress(inout headers hdr,
             }
           } else if (meta.count >= meta.numWorkers && meta.nextStep == 1) {
             send_to_next_switch();
-
-            ipv4Handler2.apply(hdr, standard_metadata);
           } else {
             // Packet is duplicate or chunk is not ready, so drop
             drop();
           }
         }
-
-        if (hdr.sml.type == 1) {
-          // Reply from switch, so send down
-          multicast();
-
-          // Manupulate values to override local agg values
-          meta.count = 1;
-        }
-
-        // Do aggregation logic
-        aggregationHandler.apply(hdr, meta, idx);
 
       } else if (hdr.sync.isValid()) {
         syncer.apply(hdr, 1);
