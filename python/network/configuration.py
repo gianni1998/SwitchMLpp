@@ -46,6 +46,15 @@ class TopoConfig(ABC):
             }
         )
 
+        sw.insertTableEntry(
+            table_name="TheIngress.switch_rank",
+            default_action="TheIngress.set_switch_rank",
+            action_name="TheIngress.set_switch_rank",
+            action_params= {
+                "rank": int(sw.name[-1]),
+            }
+        )
+
 
     def ipv4_entry(self, sw, ip, mac, port):
         """

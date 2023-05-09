@@ -91,7 +91,7 @@ class SDNController(P4Host):
         """
         Method to update switch control planes accordingly
         """
-        # Todo: refactor, clean and optimise this monstrosity of a function
+        # TODO: refactor, clean and optimise this monstrosity of a function
         
         prev = wx = f"w{rank}"
         lca = None

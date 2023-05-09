@@ -44,6 +44,10 @@ control TheIngress(inout headers hdr,
     meta.numWorkers = num_workers;
   }
 
+  action set_switch_rank(bit<32> rank) {
+    hdr.sml.wid = rank;
+  }
+
   action set_next_step(bit<1> step) {
     meta.nextStep = step; // 1 send up; 0 send down
   }
@@ -71,6 +75,20 @@ control TheIngress(inout headers hdr,
     }
     size = 1024;
     default_action = NoAction();
+  }
+
+  table switch_rank {
+    actions = { @defaultonly set_switch_rank; }
+    size = 1;
+  }
+
+  table debug {
+    key = { hdr.sml.idx: exact;
+            standard_metadata.ingress_port: exact;
+            meta.count: exact; 
+            hdr.sml.wid: exact; }
+    actions = { @defaultonly NoAction; }
+    size = 1;
   }
 
   apply {
@@ -104,9 +122,13 @@ control TheIngress(inout headers hdr,
           workerCounter.apply(hdr, meta, idx);
         }
 
+        debug.apply();
+
         if (hdr.sml.type == 1) {
           // Reply from switch, so send down
           multicast();
+
+          standard_metadata.egress_spec = 1;
 
           // Manupulate values to override local agg values
           meta.count = 1;
@@ -114,6 +136,9 @@ control TheIngress(inout headers hdr,
 
         // Do aggregation logic
         aggregationHandler.apply(hdr, meta, idx);
+
+        // Set switch rank
+        switch_rank.apply();
 
         if (hdr.sml.type == 0) {
 
@@ -125,7 +150,7 @@ control TheIngress(inout headers hdr,
               // Worker hasn't received chuck so resend
               reply();
             }
-          } else if (meta.count >= meta.numWorkers && meta.nextStep == 1) {
+          } else if (meta.count == meta.numWorkers && meta.nextStep == 1 && meta.seen == 0) {
             send_to_next_switch();
           } else {
             // Packet is duplicate or chunk is not ready, so drop

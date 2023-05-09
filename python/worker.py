@@ -10,7 +10,7 @@ from python.lib.comm import  unreliable_send, unreliable_receive
 
 from python.services.packet_service import sml_packet_builder, sml_packet_parser
 from python.config import NUM_ITER, CHUNK_SIZE, TIMEOUT, SDN_CONTROLLER_IP, SDN_CONTROLLER_PORT
-from python.models.packet import SubscriptionPacket, SyncPacket
+from python.models.packet import SwitchMLPacket, SubscriptionPacket, SyncPacket
 
 
 class SMLWorker:
@@ -105,18 +105,23 @@ class SMLWorker:
 
         while self.offset < len(data):
             packet = sml_packet_builder(self.rank, self.ver, self.idx, self.offset, self.mgid, data[self.offset:self.offset+CHUNK_SIZE])
+            pkt = None
+
             while(1):
                 unreliable_send(soc, packet, addr)
                 Log(f"Sending: {self.idx}, VER: {self.ver}")
 
                 try:
-                    packet, _ = unreliable_receive(soc, 2048)
-                    break
+                    response, _ = unreliable_receive(soc, 2048)
+
+                    pkt = SwitchMLPacket(response)
+                    if pkt[SwitchMLPacket].offset == self.offset:
+                        break
 
                 except socket.timeout:
                     Log("Time out")
 
-            self.offset, self.idx, self.ver = sml_packet_parser(packet, result)
+            self.offset, self.idx, self.ver = sml_packet_parser(response, result)
 
         Log(f'final-result: {result}')
 
