@@ -1,8 +1,6 @@
 from mininet.topo import Topo
 from mininet.util import macColonHex
 
-from mininet.topolib import TreeTopo
-
 from python.sdn_controller import SDNController
 from python.config import NUM_WORKERS, SDN_CONTROLLER_IP, SDN_CONTROLLER_MAC, TREE_DEPTH, TREE_FANOUT
 

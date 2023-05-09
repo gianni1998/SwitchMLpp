@@ -8,6 +8,7 @@ from mininet.net import Mininet
 from python.lib.p4app.src.p4_mininet import P4Host
 from python.config import SDN_CONTROLLER_PORT, BUFFER_SIZE
 
+from python.services.controller import create_entries, update_entries, delete_entries
 from python.services.graph import build_graph, get_parent_name, get_shortest_path, get_lca
 from python.services.network import mac_lookup, port_lookup, ip_lookup
 from python.models.switch import SwitchConnectionInfo
@@ -91,8 +92,8 @@ class SDNController(P4Host):
         """
         Method to update switch control planes accordingly
         """
-        # TODO: refactor, clean and optimise this monstrosity of a function
-        
+        # TODO: add next step entries
+
         prev = wx = f"w{rank}"
         lca = None
         
@@ -124,134 +125,21 @@ class SDNController(P4Host):
 
             for port in ports:
                 ip = self.ip_lookup[sw][port]
-
+                
                 if sub:
-
                     # Create
                     if mgid not in self.conn_infos[sw].mgids:
-
-                        # Multicast group
-                        self.conn_infos[sw].mgids.append(mgid)
-                        self.conn_infos[sw].mg_ports[mgid] = [port]
-                        self.conn_infos[sw].connection.addMulticastGroup(mgid=mgid, ports=self.conn_infos[sw].mg_ports[mgid])
-
-                        # Worker count
-                        self.conn_infos[sw].connection.insertTableEntry(
-                            table_name="TheIngress.num_workers",
-                            match_fields={"hdr.sml.mgid": mgid},
-                            action_name="TheIngress.set_num_workers",
-                            action_params={
-                                "num_workers": len(self.conn_infos[sw].mg_ports[mgid]),
-                            },
-                        )
-
-                        # SwitchML
-                        self.conn_infos[sw].connected_ip.append(ip)
-                        self.conn_infos[sw].connection.insertTableEntry(
-                            table_name="TheEgress.sml_handler",
-                            match_fields={"standard_metadata.egress_port": port},
-                            action_name="TheEgress.sml_forward",
-                            action_params={
-                                "worker_mac": self.mac_lookup[sw][port],
-                                "worker_ip": ip,
-                            },
-                        )
+                        create_entries(info=self.conn_infos[sw], mgid=mgid, port=port, ip=ip, mac=self.mac_lookup[sw][port])
                     
                     # Update
-                    elif mgid in self.conn_infos[sw].mgids:
-
-                        if ip not in self.conn_infos[sw].connected_ip:
-                            # Multicast group
-                            self.conn_infos[sw].mg_ports[mgid].append(port)
-                            self.conn_infos[sw].connection.updateMulticastGroup(mgid=mgid, ports=self.conn_infos[sw].mg_ports[mgid])
-
-                            # Worker count
-                            self.conn_infos[sw].connection.removeTableEntry(
-                                table_name="TheIngress.num_workers",
-                                match_fields={"hdr.sml.mgid": mgid},
-                                action_name="TheIngress.set_num_workers",
-                                action_params={
-                                    "num_workers": len(self.conn_infos[sw].mg_ports[mgid]) - 1,
-                                },
-                            )
-
-                            self.conn_infos[sw].connection.insertTableEntry(
-                                table_name="TheIngress.num_workers",
-                                match_fields={"hdr.sml.mgid": mgid},
-                                action_name="TheIngress.set_num_workers",
-                                action_params={
-                                    "num_workers": len(self.conn_infos[sw].mg_ports[mgid]),
-                                },
-                            )
-
-                            # SwitchML
-                            self.conn_infos[sw].connected_ip.append(ip)
-                            self.conn_infos[sw].connection.insertTableEntry(
-                                table_name="TheEgress.sml_handler",
-                                match_fields={"standard_metadata.egress_port": port},
-                                action_name="TheEgress.sml_forward",
-                                action_params={
-                                    "worker_mac": self.mac_lookup[sw][port],
-                                    "worker_ip": ip,
-                                },
-                            )
+                    else:
+                        update_entries(info=self.conn_infos[sw], mgid=mgid, port=port, ip=ip, mac=self.mac_lookup[sw][port])
                 
                 else:
-
                     # Delete
                     if mgid not in self.conn_infos[sw].mgids or port not in self.conn_infos[sw].mg_ports[mgid]:
                         continue
                     
-                    if len(self.conn_infos[sw].mg_ports[mgid]) > 1:
-                        # Multicast group
-                        self.conn_infos[sw].mg_ports[mgid].remove(port)
-                        self.conn_infos[sw].connection.updateMulticastGroup(mgid=mgid, ports=self.conn_infos[sw].mg_ports[mgid])
-
-                        # Worker count
-                        self.conn_infos[sw].connection.removeTableEntry(
-                            table_name="TheIngress.num_workers",
-                            match_fields={"hdr.sml.mgid": mgid},
-                            action_name="TheIngress.set_num_workers",
-                            action_params={
-                                "num_workers": len(self.conn_infos[sw].mg_ports[mgid]) + 1,
-                            },
-                        )
-
-                        self.conn_infos[sw].connection.insertTableEntry(
-                            table_name="TheIngress.num_workers",
-                            match_fields={"hdr.sml.mgid": mgid},
-                            action_name="TheIngress.set_num_workers",
-                            action_params={
-                                "num_workers": len(self.conn_infos[sw].mg_ports[mgid]),
-                            },
-                        )
-
-                    else:
-                        # Multicast group
-                        self.conn_infos[sw].mgids.remove(mgid)
-                        self.conn_infos[sw].connection.deleteMulticastGroup(mgid=mgid, ports=self.conn_infos[sw].mg_ports[mgid])
-                        del self.conn_infos[sw].mg_ports[mgid]
-
-                        # Worker count
-                        self.conn_infos[sw].connection.removeTableEntry(
-                            table_name="TheIngress.num_workers",
-                            match_fields={"hdr.sml.mgid": mgid},
-                            action_name="TheIngress.set_num_workers",
-                            action_params={
-                                "num_workers": 1,
-                            },
-                        )
-
-                    # SwitchML
-                    self.conn_infos[sw].connected_ip.remove(ip)
-                    self.conn_infos[sw].connection.removeTableEntry(
-                        table_name="TheEgress.sml_handler",
-                        match_fields={"standard_metadata.egress_port": port},
-                        action_name="TheEgress.sml_forward",
-                        action_params={
-                            "worker_mac": self.mac_lookup[sw][port],
-                            "worker_ip": ip,
-                        },
-                    )
+                    delete_entries(info=self.conn_infos[sw], mgid=mgid, port=port, ip=ip, mac=self.mac_lookup[sw][port])
                     
             prev = sw
