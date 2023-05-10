@@ -136,10 +136,7 @@ class SDNController(P4Host):
                         update_entries(info=self.conn_infos[sw], mgid=mgid, port=port, ip=ip, mac=self.mac_lookup[sw][port])
                 
                 else:
-                    # Delete
-                    if mgid not in self.conn_infos[sw].mgids or port not in self.conn_infos[sw].mg_ports[mgid]:
-                        continue
-                    
+                    # Delete                    
                     delete_entries(info=self.conn_infos[sw], mgid=mgid, port=port, ip=ip, mac=self.mac_lookup[sw][port])
                     
             prev = sw
