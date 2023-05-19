@@ -1,6 +1,6 @@
 import networkx as nx
 
-from typing import List
+from typing import List, Tuple
 
 from mininet.net import Mininet
 
@@ -26,24 +26,29 @@ def build_graph(net: Mininet) -> nx.Graph:
 
     g.add_weighted_edges_from(edges)
 
-    return g
+    mst = nx.algorithms.tree.mst.minimum_spanning_tree(g)
+
+    #root_node = [node for node, degree in mst.degree() if degree == 2][0]
+    root_node = [node for node, degree in mst.degree()]
+    print("Root node of the spanning tree:", root_node)
+
+    return mst
 
 
 def get_lca(graph: nx.Graph, src: str, dst: str) -> str:
     """
     Find the lowest common ancestor between two nodes
     """
-    path = nx.dijkstra_path(G=graph, source=src, target=dst)[1:] # Remove self
-    n = len(path)
-
-    return path[int(n/2)]
+    return nx.algorithms.lowest_common_ancestors.lowest_common_ancestor(G=graph, node1=src, node2=dst)
 
 
-def get_shortest_path(graph: nx.Graph, src: str, dst: str) -> List[str]:
+def get_shortest_path(graph: nx.Graph, src: str, dst: str) -> Tuple[List[str], int]:
     """
     Method to get the shortest path between two nodes
     """
-    return nx.dijkstra_path(G=graph, source=src, target=dst)[1:] # Remove self
+    path = nx.dijkstra_path(G=graph, source=src, target=dst)
+
+    return path, len(path)
 
 
 def get_parent_name(graph: nx.Graph, node: str) -> str:

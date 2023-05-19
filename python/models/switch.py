@@ -18,9 +18,22 @@ class SwitchConnectionInfo:
     connected_ip: List[str]
     """IP list of connected SML workers"""
 
+    next_step: Dict[int, int]
+    """Dictrionaty containing the next step of a switch"""
+
     def __init__(self, connection):
         self.connection = connection
         self.mgids = []
         self.mg_ports = {}
         self.connected_ip = []
-    
+        self.next_step = {}
+
+
+
+@dataclass
+class SwitchMLInfo:
+    parents: Dict[str, int]
+    """Connected parent nodes Dict[Name, port]"""
+
+    children: Dict[str, int]
+    """Connected child nodes Dict[Name, port]"""
