@@ -3,8 +3,8 @@ from mininet.topo import Topo
 
 import python.lib.config
 from python.lib.p4app.src.p4app import P4Mininet
-from python.network.topology import Lab5Topo, SingleSwitchTopo, TreeTopo
-from python.network.configuration import TopoConfig, Lab5Config, SingleSwitchConfig, TreeTopoConfig
+from python.network.topology import Lab5Topo, SingleSwitchTopo, TreeTopo, FatTreeTopo
+from python.network.configuration import TopoConfig, Lab5Config, SingleSwitchConfig, TreeTopoConfig, FatTreeConfig
 
 
 def build_mini_net(config: TopoConfig, topo: Topo, use_sdn: bool):
@@ -23,6 +23,7 @@ def build_mini_net(config: TopoConfig, topo: Topo, use_sdn: bool):
 
 
 if __name__ == '__main__':
-    build_mini_net(config=TreeTopoConfig(), topo=TreeTopo(), use_sdn=True)
+    build_mini_net(config=FatTreeConfig(k=4), topo=FatTreeTopo(k=4), use_sdn=True)
+    #build_mini_net(config=TreeTopoConfig(), topo=TreeTopo(), use_sdn=True)
     #build_mini_net(config=SingleSwitchConfig(), topo=SingleSwitchTopo(), use_sdn=True)
     #build_mini_net(config=Lab5Config(), topo=Lab5Topo(), use_sdn=False)

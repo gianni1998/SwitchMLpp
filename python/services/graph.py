@@ -28,9 +28,10 @@ def build_graph(net: Mininet) -> nx.Graph:
 
     mst = nx.algorithms.tree.mst.minimum_spanning_tree(g)
 
-    #root_node = [node for node, degree in mst.degree() if degree == 2][0]
-    root_node = [node for node, degree in mst.degree()]
+    root_node = [node for node, degree in mst.degree() if degree >= 2][0]
+    nodes = [node for node, degree in mst.degree()]
     print("Root node of the spanning tree:", root_node)
+    print("Spanning tree:", nodes)
 
     return mst
 

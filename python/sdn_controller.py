@@ -134,7 +134,7 @@ class SDNController(P4Host):
                 self.expand_tree(tree=tree, path=left, mgid=mgid)
             else:
                 self.shrink_tree(tree=tree, path=left, mgid=mgid)
-                self.this_is_the_way(tree=tree, mgid=mgid)
+                self.thanos(tree=tree, mgid=mgid)
 
         tree.set_root()
 
@@ -172,23 +172,6 @@ class SDNController(P4Host):
 
             prev = curr
 
-    # def shrink_tree(self, tree: Tree):
-    #     """"Remove dengling references"""
-    #
-    #     curr = tree.root
-    #     prev = None
-    #
-    #     while curr.num_children() > 1:
-    #         if next(iter(curr.children.values())).is_leaf():
-    #             return
-    #
-    #         # Update tables and tree
-    #
-    #         prev = curr
-    #         curr = next(iter(curr.children.values()))
-    #
-    #     tree.set_root()
-
     def shrink_tree(self, tree: Tree, path: List[str], mgid: int) -> None:
         prev = None
         for name in path:
@@ -215,7 +198,13 @@ class SDNController(P4Host):
 
             prev = curr
 
-    def this_is_the_way(self, tree: Tree, mgid: int) -> None:
+    def thanos(self, tree: Tree, mgid: int) -> None:
+        """
+        You couldn't live with you're own failure, so where did it bring you? Back to me!!
+        @param tree:
+        @param mgid:
+        @return:
+        """
 
         curr = tree.root
         prev = None

@@ -16,8 +16,8 @@ class TopoConfig(ABC):
         """
         pass
 
-
-    def arp_entry(self, sw, ip, mac=None):
+    @staticmethod
+    def arp_entry(sw, ip, mac=None):
         """"
         Method to add ARP entry to the contol plane
         """
@@ -31,8 +31,8 @@ class TopoConfig(ABC):
             action_params={"switch_mac": mac}
         )
 
-
-    def switch_entry(self, sw, ip):
+    @staticmethod
+    def switch_entry(sw, ip):
         """
         Mathod to add switch information to the control plane
         """
@@ -55,8 +55,8 @@ class TopoConfig(ABC):
             }
         )
 
-
-    def ipv4_entry(self, sw, ip, mac, port):
+    @staticmethod
+    def ipv4_entry(sw, ip, mac, port):
         """
         Mathod to add ipv4 forwarding entry to the control plane
         """
@@ -192,4 +192,79 @@ class TreeTopoConfig(TopoConfig):
                 port = j-1
                 # IPv4 traffic to workers
                 self.ipv4_entry(sw=sw, ip=[f"10.0.{i}.{j}", 32], mac=lookup[sw.name][port], port=port)
-       
+
+
+class FatTreeConfig(TopoConfig):
+    def __init__(self, k=4):
+        self.k = k
+
+    def run_control_plane(self, net: P4Mininet):
+        k = self.k
+        k2 = int(k/2)
+
+        # Set mac
+        n = 1000
+        for sw in net.switches:
+            mac = macColonHex(n)
+            sw.config(mac=mac)
+            n += 1
+
+            # ARP
+            self.arp_entry(sw=sw, ip="10.0.0.0")
+
+        lookup = mac_lookup(net)
+
+        # 10.k.x.y          - Core
+        # 10.pod.switch.1   - Aggregation
+        # 10.pod.switch.ID  - Edge and Workers
+
+        # Core switches
+        for core in range(self.k):
+            sw = net.get(f"s{core}")
+
+            # Switch details
+            self.switch_entry(sw=sw, ip=f"10.{k}.{int(core / k2 + 1)}.{int(core % k2 + 1)}")
+
+            # IPv4 Traffic
+            for pod in range(k):
+                # print(f"ipv4 10.{pod}.0.0 {lookup[sw.name][pod]} {pod}")
+                self.ipv4_entry(sw=sw, ip=[f"10.{pod}.0.0", 16], mac=lookup[sw.name][pod], port=pod)
+
+        for pod in range(k):
+            # Aggregation switches
+            for agg in range(k2):
+                sw = net.get(f"s{pod*k2+k+agg}")
+                # print(f"Agg: s{pod*k2+k+agg}")
+
+                # Switch details
+                self.switch_entry(sw=sw, ip=f"10.{pod}.{agg + k2}.1")
+
+                # IPv4 up
+                self.ipv4_entry(sw=sw, ip=[f"10.0.0.0", 8], mac=lookup[sw.name][agg], port=agg)
+
+                # IPv4 Traffic
+                for edge in range(k2):
+                    port = edge + k2
+                    # print(f"ipv4 10.{pod}.{edge}.0 {lookup[sw.name][port]} {port}")
+                    self.ipv4_entry(sw=sw, ip=[f"10.{pod}.{edge}.0", 24], mac=lookup[sw.name][port], port=port)
+
+            # Edge switches
+            for edge in range(k2):
+                sw = net.get(f"s{pod*k2+(k*k2+k+edge)}")
+                # print(f"Edge: s{pod*k2+(k*k2+k+edge)}")
+
+                # Switch details
+                self.switch_entry(sw=sw, ip=f"10.{pod}.{edge}.1")
+
+                # IPv4 up
+                self.ipv4_entry(sw=sw, ip=[f"10.0.0.0", 8], mac=lookup[sw.name][edge], port=edge)
+
+                # IPv4 Traffic
+                for worker in range(k2):
+                    port = worker+k2
+                    # print(f"ipv4 10.{pod}.{edge}.{worker+2} {lookup[sw.name][port]} {port}")
+                    self.ipv4_entry(sw=sw, ip=[f"10.{pod}.{edge}.{worker+2}", 32], mac=lookup[sw.name][port], port=port)
+
+        # Controller
+        sw = net.get(f"s{int(3*k**2/4)}")
+        self.ipv4_entry(sw=sw, ip=[SDN_CONTROLLER_IP, 32], mac=SDN_CONTROLLER_MAC, port=k)

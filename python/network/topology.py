@@ -90,3 +90,44 @@ class TreeTopo(Topo):
 
         return node
 
+
+class FatTreeTopo(Topo):
+
+    def __init__(self, k: int, **params):
+        Topo.__init__(self, **params)
+
+        k2 = int(k / 2)
+        num_core = k2 ** 2
+        num_agg = num_edge = k2 * k
+        num_switches = num_core + num_agg + num_edge
+
+        switches = [self.addSwitch(name=f"s{i}") for i in range(num_switches)]
+        workers = [self.addHost(name=f"w{i}", ip=f"10.{int(i/(k**2/4))}.{int((i / (k / 2)) % (k / 2))}.{int(i % (k / 2) + 2)}", mac=macColonHex(i+1)) for i in range(int(k**3/4))]
+        cores = switches[:num_core]
+        aggs = switches[num_core:num_core+num_agg]
+        edges = switches[num_core + num_agg:]
+
+        # Connect agg to core
+        for i, core in enumerate(cores):
+            for j in range(k):
+                # print(f"{core}:{j} - {aggs[int(i/k2 + (j * k2))]}:{i % k2}")
+                self.addLink(core, aggs[int(i/k2 + (j * k2))], port1=j, port2=i % k2)
+
+        # Connect edge to agg
+        port2 = 0
+        for i, agg in enumerate(aggs):
+            for j in range(int(k/2)):
+                # print(f"{agg}:{j + k2} - {edges[j + (int(i / k2) * k2)]}:{port2}")
+                self.addLink(agg, edges[j + (int(i / k2) * k2)], port1=j+k2, port2=port2)
+
+            port2 = (port2 + 1) % k2
+
+        # Connect workers to edge
+        for i, switch in enumerate(edges):
+            for j in range(k2):
+                #print(f"{switch}:{j + k2} - {workers[(i*k2+j)]}:{0}")
+                self.addLink(switch, workers[(i*k2+j)], port1=j + k2, port2=0)
+
+        # Controller
+        c0 = self.addHost(name="c0", ip=SDN_CONTROLLER_IP, mac=SDN_CONTROLLER_MAC, cls=SDNController)
+        self.addLink(edges[0], c0, port1=k, port2=0)
