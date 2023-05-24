@@ -1,40 +1,41 @@
+import networkx as nx
 from typing import Dict, List
 from collections import deque
+from mininet.net import Mininet
 
+from python.services.network import port_lookup
 from python.models.tree import Tree, TreeNode
 
 
-def get_mst() -> Tree:
+def get_mst(net: Mininet) -> Tree:
     """
     Get Minimum Spanning Tree (mst) of a network
     @return: Tree which represents the mst
     """
+    ports = port_lookup(net=net)
+
     tree = Tree()
 
-    root = TreeNode(name="s0")
-    s1 = TreeNode(name="s1")
-    s2 = TreeNode(name="s2")
-    w0 = TreeNode(name="w0")
-    w1 = TreeNode(name="w1")
-    w2 = TreeNode(name="w2")
-    w3 = TreeNode(name="w3")
+    g = nx.Graph()
+    g.add_nodes_from([node.name for node in net.nameToNode.values()], key=list)
+    g.add_edges_from([(link.intf1.node.name, link.intf2.node.name) for link in net.links], weight=1, key=list)
 
-    tree.add_node(root)
-    tree.add_node(s1)
-    tree.add_node(s2)
-    tree.add_node(w0)
-    tree.add_node(w1)
-    tree.add_node(w2)
-    tree.add_node(w3)
+    mst = nx.algorithms.approximation.steiner_tree(G=g, terminal_nodes=[f"w{i}" for i in range(16)])
 
-    root.add_child(child=s1, port=1)
-    root.add_child(child=s2, port=2)
+    for node in mst.nodes():
+        mn_node = net.get(node)
+        tree.add_node(node=TreeNode(name=node,
+                                    ip = mn_node.IP() if node[0] == 'w' else mn_node.ip,
+                                    mac = mn_node.MAC()))
 
-    s1.add_child(child=w0, port=1)
-    s1.add_child(child=w1, port=2)
+    for link in mst.edges():
+        node1 = tree.get_node(name=link[0])
+        node2 = tree.get_node(name=link[1])
 
-    s2.add_child(child=w2, port=1)
-    s2.add_child(child=w3, port=2)
+        if node1.is_wroker():
+            node2.add_child(child=node1, port=ports[node2.name][node1.name])
+        else:
+            node1.add_child(child=node2, port=ports[node1.name][node2.name])
 
     tree.set_root()
 

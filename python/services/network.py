@@ -23,21 +23,6 @@ def mac_lookup(net: Mininet) -> Dict[str, Dict[int, str]]:
     return lookup
 
 
-def ip_lookup() -> Dict[str, Dict[int, str]]:
-
-    lookup = {
-        "s0": {0: SDN_CONTROLLER_IP, 1: "10.0.0.1", 2: "10.0.1.1"},
-        "s1": {0: "10.0.2.1", 1: "10.0.0.2", 2: "10.0.0.3"},
-        "s2": {0: "10.0.2.1", 1: "10.0.1.2", 2: "10.0.1.3"},
-        "w0": {0: "10.0.0.1"},
-        "w1": {0: "10.0.0.1"},
-        "w2": {0: "10.0.0.2"},
-        "w3": {0: "10.0.0.2"}
-    }
-
-    return lookup
-
-
 def port_lookup(net: Mininet) -> Dict[str, Dict[str, int]]:
     """
     Method to generate a lookup dictionary for port numbers

@@ -74,6 +74,13 @@ class TreeNode:
         """
         return self.name[0] == 'w'
     
+    def copy(self) -> 'TreeNode':
+        """
+        Copies the information (ip, mac) of this node into a new node
+        @return: TreeNode with info
+        """
+        return TreeNode(name=self.name, ip=self.ip, mac=self.mac)
+    
     def __repr__(self) -> str:
         return self.name
 
@@ -95,7 +102,7 @@ class Tree:
         self.root = None
         self.nodes = {}
 
-    def node_exists(self, name: str):
+    def node_exists(self, name: str) -> None:
         """
         Checks if node exists in the tree
         @param name: Name of the node
@@ -103,7 +110,7 @@ class Tree:
         """
         return name in self.nodes
 
-    def add_node(self, node: TreeNode):
+    def add_node(self, node: TreeNode) -> None:
         """
         Adds a node to the tree
         @param node: Node to add
@@ -138,7 +145,7 @@ class Tree:
 
         del self.nodes[node.name]
 
-    def set_root(self):
+    def set_root(self) -> None:
         """
         Traverses the tree to set the root
         """
@@ -157,7 +164,7 @@ class Tree:
         """
         return self.root
     
-    def __str__(self):
+    def __str__(self) -> str:
         result = f"Root: {self.root.name}\n"
 
         for v in self.nodes.values():

@@ -28,7 +28,7 @@ control TheIngress(inout headers hdr,
   }
 
   action send_to_next_switch() {
-    standard_metadata.egress_spec = 0;
+    standard_metadata.egress_spec = meta.nextStepPort;
   }
 
   action drop() {
@@ -48,8 +48,9 @@ control TheIngress(inout headers hdr,
     hdr.sml.wid = rank;
   }
 
-  action set_next_step(bit<1> step) {
+  action set_next_step(bit<1> step, bit<9> port) {
     meta.nextStep = step; // 1 send up; 0 send down
+    meta.nextStepPort = port;
   }
 
   table switch_mac_and_ip {

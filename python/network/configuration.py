@@ -36,6 +36,8 @@ class TopoConfig(ABC):
         """
         Mathod to add switch information to the control plane
         """
+        sw.ip = ip
+
         sw.insertTableEntry(
             table_name="TheIngress.switch_mac_and_ip",
             default_action="TheIngress.set_switch_mac_and_ip",

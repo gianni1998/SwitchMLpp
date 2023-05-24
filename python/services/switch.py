@@ -34,7 +34,7 @@ def sml_entry(conn: P4RuntimeSwitch, port: int, mac: str, ip: str, insert: bool)
     send_entry(conn=conn, table_info=SML, match=match, params=params, insert=insert)
 
 
-def next_step_entry(conn: P4RuntimeSwitch, mgid: int, step: int, insert: bool) -> None:
+def next_step_entry(conn: P4RuntimeSwitch, mgid: int, step: int, port: int, insert: bool) -> None:
     """
     Insert or remove a Next step table entry on the switch
     @param conn: Connection to the switch
@@ -43,7 +43,7 @@ def next_step_entry(conn: P4RuntimeSwitch, mgid: int, step: int, insert: bool) -
     @param insert: Boolean value that decides to inserted or remove the entry
     """
     match = {"hdr.sml.mgid": mgid}
-    params = {"step": step}
+    params = {"step": step, "port": port}
 
     send_entry(conn=conn, table_info=NEXT_STEP, match=match, params=params, insert=insert)
 
