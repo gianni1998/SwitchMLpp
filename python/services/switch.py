@@ -42,7 +42,7 @@ def next_step_entry(conn: P4RuntimeSwitch, mgid: int, step: int, port: int, inse
     @param step: Next step value
     @param insert: Boolean value that decides to inserted or remove the entry
     """
-    match = {"hdr.sml.mgid": mgid}
+    match = {"meta.mgid": mgid}
     params = {"step": step, "port": port}
 
     send_entry(conn=conn, table_info=NEXT_STEP, match=match, params=params, insert=insert)

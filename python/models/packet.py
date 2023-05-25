@@ -64,5 +64,7 @@ class SubscriptionPacket(Packet):
 class SyncPacket(Packet):
     name = "SyncPacket"
     fields_desc = [
+        BitField("mgid", 0, 16),
+        BitField("type", 0, 16),
         BitField("offset", 0, 32)
     ]

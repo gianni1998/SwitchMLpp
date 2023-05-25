@@ -29,8 +29,7 @@ def port_lookup(net: Mininet) -> Dict[str, Dict[str, int]]:
     """
     lookup = {}
 
-    nodes = net.switches
-    nodes.extend(net.hosts)
+    nodes = net.nameToNode.values()
 
     for node in nodes:
         if node.name not in lookup:

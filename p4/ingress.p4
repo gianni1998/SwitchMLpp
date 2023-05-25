@@ -27,6 +27,12 @@ control TheIngress(inout headers hdr,
     standard_metadata.egress_spec = standard_metadata.ingress_port;
   }
 
+  action sync_reply() {
+    ipv4_addr_t temp = hdr.ipv4.sourceAddress;
+    hdr.ipv4.sourceAddress = hdr.ipv4.destinationAddress;
+    hdr.ipv4.destinationAddress = temp;
+  }
+
   action send_to_next_switch() {
     standard_metadata.egress_spec = meta.nextStepPort;
   }
@@ -69,7 +75,7 @@ control TheIngress(inout headers hdr,
   }
 
   table next_step {
-    key = { hdr.sml.mgid: exact; }
+    key = { meta.mgid: exact; }
     actions = {
       set_next_step;
       NoAction;
@@ -84,10 +90,20 @@ control TheIngress(inout headers hdr,
   }
 
   table debug {
-    key = { hdr.sml.idx: exact;
-            standard_metadata.ingress_port: exact;
-            meta.count: exact; 
-            hdr.sml.wid: exact; }
+    key = { hdr.sync.mgid: exact;
+            hdr.sync.type: exact;
+            hdr.sync.offset: exact; 
+            meta.nextStep: exact;
+            meta.nextStepPort: exact; 
+            meta.mgid: exact; 
+            hdr.ipv4.sourceAddress: exact;
+            hdr.ipv4.destinationAddress : exact;}
+    actions = { @defaultonly NoAction; }
+    size = 1;
+  }
+
+  table debug2 {
+    key = {meta.mgid: exact;}
     actions = { @defaultonly NoAction; }
     size = 1;
   }
@@ -99,7 +115,34 @@ control TheIngress(inout headers hdr,
 
     } else if (hdr.ipv4.isValid()) {
 
-      if (hdr.sml.isValid()) {
+
+      if (hdr.sml.isValid() || hdr.sync.isValid()) {
+        if (hdr.sml.isValid()) {
+          meta.mgid = hdr.sml.mgid;
+        } else {
+          meta.mgid = hdr.sync.mgid;
+        }
+
+        next_step.apply();
+        debug2.apply();
+      }
+    
+      if (hdr.sync.isValid()) {
+
+        if (hdr.sync.type == 0) {
+          if (meta.nextStep == 1) {
+            send_to_next_switch();
+          } else {
+            syncer.apply(hdr, 1);
+            hdr.sync.type = 1;
+
+            sync_reply();
+          }
+        }
+
+        debug.apply(); 
+
+      } else if (hdr.sml.isValid()) {
         bit<32> idx = 0;
 
         // Get number of workers in group
@@ -107,9 +150,6 @@ control TheIngress(inout headers hdr,
 
         // Save offset in register for sync
         syncer.apply(hdr, 0);
-
-        // Get next step
-        next_step.apply();
 
         @atomic {
           // Check if packet is duplicate
@@ -122,8 +162,6 @@ control TheIngress(inout headers hdr,
           // Count worker if not seen or reset counter
           workerCounter.apply(hdr, meta, idx);
         }
-
-        debug.apply();
 
         if (hdr.sml.type == 1) {
           // Reply from switch, so send down
@@ -144,6 +182,8 @@ control TheIngress(inout headers hdr,
         if (hdr.sml.type == 0) {
 
           if (meta.count == 0) {
+            switch_mac_and_ip.apply();
+
             if (meta.seen == 0) {
               // All chunks have been aggregated
               multicast();
@@ -158,17 +198,10 @@ control TheIngress(inout headers hdr,
             drop();
           }
         }
-
-      } else if (hdr.sync.isValid()) {
-        syncer.apply(hdr, 1);
-        reply();
-
-      } else {
-        ipv4Handler.apply(hdr, standard_metadata);
       }
 
-      if (hdr.sync.isValid() || hdr.sml.isValid()) {
-        switch_mac_and_ip.apply();
+      if ((!hdr.sml.isValid() && !hdr.sync.isValid()) || (hdr.sync.isValid() && hdr.sync.type == 1)) {
+        ipv4Handler.apply(hdr, standard_metadata);
       }
     }
   }

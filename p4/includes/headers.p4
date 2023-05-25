@@ -89,6 +89,8 @@ header data_t {
 }
 
 header sync_t {
+  bit<16> mgid;
+  bit<16> type;
   bit<32> offset;
 }
 

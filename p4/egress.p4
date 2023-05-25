@@ -20,7 +20,7 @@ control TheEgress(inout headers hdr,
   }
 
   apply {
-    if (hdr.sml.isValid() || hdr.sync.isValid()){
+    if (hdr.sml.isValid()){
       sml_handler.apply();
     }
   }

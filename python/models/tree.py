@@ -1,5 +1,128 @@
 from typing import Dict, List
 
+from python.lib.p4app.src.p4_mininet import P4RuntimeSwitch
+
+
+class Node:
+    """
+    Class that represents a node in a tree
+    """
+
+    _name: str
+    "Name of the Node"
+    _ip: str
+    "IP address of the Node in the network"
+    _mac: str
+    "MAC address of the Node"
+    _parent: 'Node'
+    "Parent of the Node"
+    _children: Dict[int, 'Node']
+    "Children connected on a port of the Node"
+    _name_to_port: Dict[str, int]
+    "Lookup for name of child to connected port"
+
+    def __init__(self, name: str, **params):
+        """
+        Constructor
+        @param name: Name of the node
+        @param params: Params
+        """
+        self._name = name
+        self._ip = params.get("ip", '')
+        self._mac = params.get("mac", '')
+        self._parent = None
+        self._children = {}
+        self._name_to_port = {}
+
+    @property
+    def name(self) -> str:
+        return self._name
+    
+    @property
+    def ip(self) -> str:
+        return self._ip
+
+    @property
+    def mac(self) -> str:
+        return self._mac
+
+    @property
+    def parent(self) -> 'Node':
+        return self._parent
+
+    @parent.setter
+    def parent(self, value: 'Node') -> None:
+        self._parent = value
+
+    @property
+    def children(self):
+        return self._children.values()
+
+    @property
+    def ports(self):
+        return self._children.keys()
+
+    def add_child(self, child: 'Node', port: int):
+        """
+        Adds a child to the Node
+        @param child: Child node to add
+        @param port: Port number to which the child is connected
+        """
+        child.parent = self
+        self._children[port] = child
+        self._name_to_port[child.name] = port
+
+    def delete_child(self, name: str):
+        """
+        Deletes a Node from its children by name
+        @param name: Name of the child that needs to be removed
+        """
+        del self._children[self._name_to_port[name]]
+        del self._name_to_port[name]
+
+    def is_worker(self) -> bool:
+        """
+        Checks if Node is a worker
+        @return: Boolean result of this check
+        """
+        return self.name[0] == 'w'
+    
+    def __repr__(self) -> str:
+        return self.name
+
+    def __str__(self) -> str:
+        return f"{self.name}: p {None if self.parent is None else self.parent.name}, c {self._children}"
+    
+
+class SMLNode(Node):
+    """
+    Class that represents a SwitchML node in a tree
+    """
+
+    _conn: P4RuntimeSwitch
+    "Connection to the in-network P4 switch"
+
+    def __init__(self, name: str, conn: P4RuntimeSwitch, **params):
+        """
+        Constructor
+        @param name:
+        @param conn:
+        @param params:
+        """
+        Node.__init__(name, **params)
+        self._conn = conn
+
+    def add_child(self, child: 'Node', port: int):
+        Node.add_child(child, port)
+
+        # ToDo: add control plane logic
+
+    def delete_child(self, name: str):
+        Node.delete_child(name)
+
+        # ToDo: add control plane logic
+
+
 
 class TreeNode:
     """

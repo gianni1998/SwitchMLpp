@@ -1,5 +1,6 @@
 import socket
 import netifaces
+import time
 from scapy.all import raw
 
 import python.lib.config
@@ -39,6 +40,7 @@ class SMLWorker:
         """
         #self.initialise()
 
+        time.sleep(5)
         Log("Started syncing...")
         self.sync()
 
@@ -75,7 +77,7 @@ class SMLWorker:
             s.settimeout(TIMEOUT)
 
             addr = ("10.0.0.0", 65432)
-            pkt = raw(SyncPacket(offset=0))
+            pkt = raw(SyncPacket(mgid=self.mgid, type=0, offset=0))
 
             while 1:
                 unreliable_send(s, pkt, addr)
