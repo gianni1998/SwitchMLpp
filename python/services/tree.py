@@ -4,7 +4,7 @@ from collections import deque
 from mininet.net import Mininet
 
 from python.services.network import port_lookup
-from python.models.tree import Tree, TreeNode
+from python.models.tree import Tree, Node
 
 
 def get_mst(net: Mininet) -> Tree:
@@ -24,18 +24,18 @@ def get_mst(net: Mininet) -> Tree:
 
     for node in mst.nodes():
         mn_node = net.get(node)
-        tree.add_node(node=TreeNode(name=node,
-                                    ip = mn_node.IP() if node[0] == 'w' else mn_node.ip,
-                                    mac = mn_node.MAC()))
+        tree.add_node(node=Node(name=node,
+                                ip=mn_node.IP() if node[0] == 'w' else mn_node.ip,
+                                mac=mn_node.MAC()))
 
     for link in mst.edges():
         node1 = tree.get_node(name=link[0])
         node2 = tree.get_node(name=link[1])
 
-        if node1.is_wroker():
-            node2.add_child(child=node1, port=ports[node2.name][node1.name])
+        if node1.is_worker():
+            node2.add_child(child=node1, portc=ports[node2.name][node1.name], portp=ports[node1.name][node2.name])
         else:
-            node1.add_child(child=node2, port=ports[node1.name][node2.name])
+            node1.add_child(child=node2, portc=ports[node1.name][node2.name], portp=ports[node2.name][node1.name])
 
     tree.set_root()
 
@@ -68,7 +68,7 @@ def shortest_path(tree: Tree, src: str, dst: str) -> List[str]:
             return path + [current.name]
 
         # Add the children of the current node to the queue
-        for child in current.children.values():
+        for child in current.children:
             queue.append((child, path + [current.name]))
 
         parent = current.parent

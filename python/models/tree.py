@@ -2,6 +2,8 @@ from typing import Dict, List
 
 from python.lib.p4app.src.p4_mininet import P4RuntimeSwitch
 
+from python.services.switch import sml_entry, next_step_entry, num_workers_entry
+
 
 class Node:
     """
@@ -16,6 +18,8 @@ class Node:
     "MAC address of the Node"
     _parent: 'Node'
     "Parent of the Node"
+    _parent_port: int
+    "Port to which parent is connected"
     _children: Dict[int, 'Node']
     "Children connected on a port of the Node"
     _name_to_port: Dict[str, int]
@@ -50,35 +54,60 @@ class Node:
     def parent(self) -> 'Node':
         return self._parent
 
-    @parent.setter
-    def parent(self, value: 'Node') -> None:
-        self._parent = value
+    @property
+    def children(self) -> List['Node']:
+        return list(self._children.values())
 
     @property
-    def children(self):
-        return self._children.values()
-
+    def ports(self) -> List[int]:
+        return list(self._children.keys())
+    
     @property
-    def ports(self):
-        return self._children.keys()
+    def num_children(self) -> int:
+        return len(self._children)
 
-    def add_child(self, child: 'Node', port: int):
+    def add_child(self, child: 'Node', portc: int, portp: int):
         """
         Adds a child to the Node
         @param child: Child node to add
-        @param port: Port number to which the child is connected
+        @param portc: Port number to which the parent is connected to the child
+        @param portp: Port number to which the child is connected to the parent
         """
-        child.parent = self
-        self._children[port] = child
-        self._name_to_port[child.name] = port
+        if child.name not in self._name_to_port:
+            self._children[portc] = child
+            self._name_to_port[child.name] = portc
+
+            child.add_parent(parent=self, portc=portc, portp=portp)
 
     def delete_child(self, name: str):
         """
         Deletes a Node from its children by name
         @param name: Name of the child that needs to be removed
         """
-        del self._children[self._name_to_port[name]]
-        del self._name_to_port[name]
+        if name in self._name_to_port:
+            del self._children[self._name_to_port[name]]
+            del self._name_to_port[name]
+
+    def add_parent(self, parent: 'Node', portc: int, portp: int) -> None:
+        """
+        Add the parent Node
+        @param parent: The parent that needs to be added
+        @param portc: Port number to which the parent is connected to the child
+        @param portp: Port number to which the child is connected to the parent
+        """
+        if self._parent is None:
+            self._parent = parent
+            self._parent_port = portp
+
+            parent.add_child(child=self, portc=portc, portp=portp)
+
+    def delete_parent(self) -> None:
+        """
+        Delete the parent Node
+        """
+        if self.parent is not None:
+            self._parent = None
+            self._parent_port = 0
 
     def is_worker(self) -> bool:
         """
@@ -101,152 +130,136 @@ class SMLNode(Node):
 
     _conn: P4RuntimeSwitch
     "Connection to the in-network P4 switch"
+    _mgid: int
+    "Multicat group ID"
 
-    def __init__(self, name: str, conn: P4RuntimeSwitch, **params):
+    def __init__(self, name: str, conn: P4RuntimeSwitch, mgid: int, **params):
         """
         Constructor
-        @param name:
-        @param conn:
-        @param params:
+        @param name: Name of the Node
+        @param conn: Connection to the switch
+        @param mgid: Multicast group id
+        @param params: Additional parameters
         """
-        Node.__init__(name, **params)
+        Node.__init__(self, name=name, **params)
         self._conn = conn
+        self._mgid = mgid
 
-    def add_child(self, child: 'Node', port: int):
-        Node.add_child(child, port)
+        if not self.is_worker():
+            next_step_entry(conn=conn, mgid=mgid, step=0, port=0, insert=True)
 
-        # ToDo: add control plane logic
+    def add_child(self, child: 'Node', portc: int, portp: int):
+        if child.name in self._name_to_port:
+            return
 
-    def delete_child(self, name: str):
-        Node.delete_child(name)
+        self._children[portc] = child
+        self._name_to_port[child.name] = portc
 
-        # ToDo: add control plane logic
+        if self.is_worker():
+            return
 
+        if self.num_children == 1:
+            self._conn.addMulticastGroup(mgid=self._mgid, ports=self.ports)
+        else:
+            self._conn.updateMulticastGroup(mgid=self._mgid, ports=self.ports)
+            num_workers_entry(conn=self._conn, mgid=self._mgid, num=self.num_children - 1, insert=False)
 
+        num_workers_entry(conn=self._conn, mgid=self._mgid, num=self.num_children, insert=True)
+        sml_entry(conn=self._conn, port=portc, mac=child.mac, ip=child.ip, insert=True)
 
-class TreeNode:
-    """
-    Class that represents a Node in a tree
-    """
-    name: str
-    ip: str
-    mac: str
-    parent: 'TreeNode'
-    children: Dict[int, 'TreeNode']
+        child.add_parent(parent=self, portc=portc, portp=portp)
 
-    def __init__(self, name: str, **params):
-        """
-        Constructor
-        @param name: Name of the node
-        @param params: Params
-        """
-        self.name = name
-        self.ip = params.get("ip", '')
-        self.mac = params.get("mac", '')
-        self.parent = None
-        self.children = {}
+    def delete_child(self, name: str) -> None:
+        if name not in self._name_to_port:
+            return
 
-    def add_parent(self, parent: 'TreeNode') -> None:
-        """
-        Sets the parent node
-        @param parent: The parent of this node
-        """
-        self.parent = parent
+        port = self._name_to_port[name]
+        child = self._children[port]
 
-    def add_child(self, child: 'TreeNode', port: int) -> None:
-        """
-        Adds a child to this node
-        @param child: The child which needs to be added
-        @param port: Port number to which the child is connected
-        """
-        self.children[port] = child
-        child.add_parent(self)
+        del self._children[port]
+        del self._name_to_port[name]
 
-    def get_parents(self) -> 'TreeNode':
-        """
-        Gets the parent node of this node
-        @return: The parent of this node
-        """
-        return self.parent
+        # Todo: Fix bug with not correctly deleting all nodes on s0
 
-    def get_children(self) -> List['TreeNode']:
-        """
-        Gets all child nodes of this node
-        @return: List with all children
-        """
-        return self.children.values()
+        num_workers_entry(conn=self._conn, mgid=self._mgid, num=self.num_children + 1, insert=False)
+        sml_entry(conn=self._conn, port=port, mac=child.mac, ip=child.ip, insert=False)
 
-    def num_children(self) -> int:
-        """
-        Get the number of children
-        @return: The number of children
-        """
-        return len(self.children)
-    
-    def is_leaf(self) -> bool:
-        """
-        Checks if this node is a leaf
-        @return: Boolean result of this check
-        """
-        return len(self.children) == 0
-    
-    def is_wroker(self) -> bool:
-        """
-        Checks if this node is a worker
-        @return: Boolean result of this check
-        """
-        return self.name[0] == 'w'
-    
-    def copy(self) -> 'TreeNode':
-        """
-        Copies the information (ip, mac) of this node into a new node
-        @return: TreeNode with info
-        """
-        return TreeNode(name=self.name, ip=self.ip, mac=self.mac)
-    
-    def __repr__(self) -> str:
-        return self.name
+        if self.num_children == 0:
+            self._conn.deleteMulticastGroup(mgid=self._mgid, ports=[])
+            next_step_entry(conn=self._conn, mgid=self._mgid, step=0, port=0, insert=False)
+        else:
+            self._conn.updateMulticastGroup(mgid=self._mgid, ports=self.ports)
+            num_workers_entry(conn=self._conn, mgid=self._mgid, num=self.num_children, insert=True)
 
-    def __str__(self) -> str:
-        return f"{self.name}: p {None if self.parent is None else self.parent.name}, c {self.children}"
-    
+        child.delete_parent()
+
+    def add_parent(self, parent: 'Node', portc: int, portp: int) -> None:
+        if self._parent is not None:
+            return
+
+        self._parent = parent
+        self._parent_port = portp
+
+        if not self.is_worker():
+            next_step_entry(conn=self._conn, mgid=self._mgid, step=0, port=0, insert=False)
+            next_step_entry(conn=self._conn, mgid=self._mgid, step=1, port=portp, insert=True)
+
+        parent.add_child(child=self, portc=portc, portp=portp)
+
+    def delete_parent(self) -> None:
+        if self.parent is None or self.is_worker():
+            return
+
+        self.parent.delete_child(name=self.name)
+        next_step_entry(conn=self._conn, mgid=self._mgid, step=1, port=self._parent_port, insert=False)
+
+        if self.num_children > 0:
+            next_step_entry(conn=self._conn, mgid=self._mgid, step=0, port=0, insert=True)
+
 
 class Tree:
     """
     Class that represents a tree
     """
-    root: TreeNode
-    nodes: Dict[str, TreeNode]
+
+    _root: Node
+    "Root Node of the tree"
+    _nodes: Dict[str, Node]
+    "Dictionary of Nodes in the tree"
 
     def __init__(self):
         """
         Constructor
         """
-        self.root = None
-        self.nodes = {}
+        self._root = None
+        self._nodes = {}
 
-    def node_exists(self, name: str) -> None:
+    @property
+    def root(self) -> Node:
+        return self._root
+
+    def node_exists(self, name: str) -> bool:
         """
         Checks if node exists in the tree
         @param name: Name of the node
         @return: Boolean result of this check
         """
-        return name in self.nodes
+        return name in self._nodes
 
-    def add_node(self, node: TreeNode) -> None:
+    def add_node(self, node: Node) -> None:
         """
         Adds a node to the tree
         @param node: Node to add
         """
-        self.nodes[node.name] = node
+        self._nodes[node.name] = node
 
-    def get_node(self, name: str) -> TreeNode:
+    def get_node(self, name: str) -> Node:
         """
         Get a node by name
         @param name: Name of the node
         @return: The node
         """
-        return self.nodes.get(name, None)
+        return self._nodes.get(name, None)
 
     def del_node(self, name: str) -> None:
         """
@@ -256,41 +269,29 @@ class Tree:
         node = self.get_node(name=name)
 
         if node.parent is not None:
-            for k, v in node.parent.children.items():
-                if v.name is node.name:
-                    del node.parent.children[k]
-                    break
+            node.delete_parent()
 
-        for child in node.children.values():
-            child.parent = None
+        for child in node.children:
+            child.delete_parent()
 
-        node.children = None
-
-        del self.nodes[node.name]
+        del self._nodes[node.name]
 
     def set_root(self) -> None:
         """
         Traverses the tree to set the root
         """
-        if len(self.nodes) > 0:
+        if len(self._nodes) > 0:
             
-            node = next(iter(self.nodes.values()))
+            node = next(iter(self._nodes.values()))
             while node.parent is not None:
                 node = node.parent
 
-            self.root = node
-
-    def get_root(self) -> TreeNode:
-        """
-        Get the root node of the tree
-        @return: Root node
-        """
-        return self.root
+            self._root = node
     
     def __str__(self) -> str:
         result = f"Root: {self.root.name}\n"
 
-        for v in self.nodes.values():
+        for v in self._nodes.values():
             result += v.__str__() + '\n'
 
         return result

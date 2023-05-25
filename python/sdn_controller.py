@@ -1,33 +1,31 @@
 import socket
 import threading
-import networkx as nx
 from typing import Dict, List
 from mininet.net import Mininet
 
 from python.lib.p4app.src.p4_mininet import P4Host, P4RuntimeSwitch
 
 from python.config import SDN_CONTROLLER_PORT, BUFFER_SIZE
-from python.models.tree import Tree
+from python.models.tree import Tree, SMLNode
 from python.services.network import port_lookup
 from python.services.tree import get_mst, find_lca, shortest_path
-from python.services.switch import sml_entry, next_step_entry, num_workers_entry
 
 
 class SDNController(P4Host):
     """
     Class that simulates an SDN controller for a P4 switch
     """
-    g: nx.Graph
-    net: Mininet
     workers_in_group: Dict[int, List[str]]
     port_lookup: Dict[str, Dict[str, int]]
 
+    net: Mininet
+    "Mininet object of the network"
     mst: Tree
-    """Minimal spanning tree of the network"""
+    "Minimal spanning tree of the network"
     garden_of_eden: Dict[int, Tree]
-    """Dictionary holding the Tree's of life"""
+    "Dictionary holding the Tree's of life"
     connections: Dict[str, P4RuntimeSwitch]
-    """Dictionary holding connections to switches in the network"""
+    "Dictionary holding connections to switches in the network"
 
     def __init__(self, name, **params):
         """
@@ -91,22 +89,23 @@ class SDNController(P4Host):
     def test5(self, rank: int, mgid: int, sub: bool) -> None:
         wx = f"w{rank}"
 
-        # group = self.workers_in_group.get(mgid, None)
-        # if group is not None and wx in group and sub:
-        #     return
-        #
-        # if (group is not None and not sub) or (wx not in group and not sub):
-        #     return
+        tree = self.garden_of_eden.get(mgid, None)
+        if not sub and (tree is None or not tree.node_exists(wx)):
+            return
+
+        if sub and tree is not None and tree.node_exists(wx):
+            return
 
         if mgid not in self.garden_of_eden:
             tree = self.garden_of_eden[mgid] = Tree()
             path = [wx, self.mst.get_node(wx).parent.name]
 
+            print(f"Path: {path}")
             self.expand_tree(tree=tree, path=path, mgid=mgid)
 
         else:
             tree = self.garden_of_eden[mgid]
-            root = tree.get_root().name
+            root = tree.root.name
 
             lca = find_lca(tree=self.mst, src=wx, dst=root)
 
@@ -120,102 +119,55 @@ class SDNController(P4Host):
             if sub:
                 self.expand_tree(tree=tree, path=left, mgid=mgid)
             else:
-                self.shrink_tree(tree=tree, path=left, mgid=mgid)
+                self.shrink_tree(tree=tree, path=left)
                 print("Snap tree")
-                self.thanos(tree=tree, mgid=mgid)
+                self.top_tree(tree=tree)
 
         tree.set_root()
 
     def expand_tree(self, tree: Tree, path: List[str], mgid: int):
         prev = None
-        for name in path:
-            if not tree.node_exists(name=name):
-                node = self.mst.get_node(name=name).copy()
-                tree.add_node(node=node)
 
-                if not node.is_wroker():
-                    next_step_entry(conn=self.__get_connection(name=name), mgid=mgid, step=0, port=0, insert=True)
+        for hop in path:
+            if not tree.node_exists(name=hop):
+                node = self.mst.get_node(name=hop)
+                tree.add_node(node=SMLNode(name=hop,
+                                           conn=None if node.is_worker() else self.__get_connection(name=hop),
+                                           mgid=mgid,
+                                           ip=node.ip,
+                                           mac=node.mac))
 
-            curr = tree.get_node(name=name)
-
-            if prev is not None and prev not in curr.children:
-                curr.add_child(child=prev, port=self.port_lookup[name][prev.name])
-
-                conn = self.__get_connection(name=name)
-                if len(curr.children) > 1:
-                    conn.updateMulticastGroup(mgid=mgid, ports=curr.children.keys())
-                    num_workers_entry(conn=conn, mgid=mgid, num=curr.num_children() - 1, insert=False)
-                else:
-                    conn.addMulticastGroup(mgid=mgid, ports=curr.children.keys())
-
-                num_workers_entry(conn=conn, mgid=mgid, num=curr.num_children(), insert=True)
-                port = self.port_lookup[name][prev.name]
-                sml_entry(conn=conn, port=port, mac=prev.mac, ip=prev.ip, insert=True)
-
-                if not prev.is_wroker():
-                    next_step_entry(conn=self.__get_connection(name=prev.name), mgid=mgid, step=0, port=0, insert=False)
-                    next_step_entry(conn=self.__get_connection(name=prev.name), mgid=mgid, step=1, port=self.port_lookup[prev.name][name], insert=True)
-
-            prev = curr
-
-    def shrink_tree(self, tree: Tree, path: List[str], mgid: int) -> None:
-        prev = None
-        for name in path:
-            curr = tree.get_node(name=name)
-
-            if not curr.is_wroker() and prev is not None:
-                conn = self.__get_connection(name=curr.name)
-                num_workers_entry(conn=conn, mgid=mgid, num=curr.num_children(), insert=False)
-
-                port = self.port_lookup[name][prev.name]
-                sml_entry(conn=conn, port=port, mac=prev.mac, ip=prev.ip, insert=False)
-
-                tree.del_node(name=prev.name)
-
-                if curr.num_children() > 0:
-                    num_workers_entry(conn=conn, mgid=mgid, num=curr.num_children(), insert=True)
-                    conn.updateMulticastGroup(mgid=mgid, ports=curr.children.keys())
-
-                    return
-                else:
-                    step = 0 if curr.parent is None else 1
-                    port = 0 if step == 0 else self.port_lookup[prev.name][name]
-                    next_step_entry(conn=conn, mgid=mgid, step=step, port=port, insert=False)
-                    conn.deleteMulticastGroup(mgid=mgid, ports=[])
-
-            prev = curr
-
-    def thanos(self, tree: Tree, mgid: int) -> None:
-        """
-        You couldn't live with you're own failure, so where did it bring you? Back to me!!
-        @param tree: Tree to be purged
-        @param mgid: Multicast group ID
-        """
-        curr = tree.root
-        prev = None
-        while curr.num_children() < 2:
+            node = tree.get_node(name=hop)
 
             if prev is not None:
-                conn = self.__get_connection(name=prev.name)
-                port = self.port_lookup[prev.name][curr.name]
-                next_step_entry(conn=conn, mgid=mgid, step=0, port=0, insert=False)
-                sml_entry(conn=conn, port=port, mac=curr.mac, ip=curr.ip, insert=False)
-                num_workers_entry(conn=conn, mgid=mgid, num=1, insert=False)
+                node.add_child(child=prev, portc=self.port_lookup[node.name][prev.name],
+                               portp=self.port_lookup[prev.name][node.name])
 
-                conn = self.__get_connection(name=curr.name)
-                next_step_entry(conn=conn, mgid=mgid, step=1, port=self.port_lookup[curr.name][prev.name], insert=False)
-                next_step_entry(conn=conn, mgid=mgid, step=0, port=0, insert=True)
+            prev = node
 
-                tree.del_node(name=prev.name)
+    def shrink_tree(self, tree: Tree, path: List[str]) -> None:
+        for hop in path:
+            node = tree.get_node(name=hop)
 
-            child = next(iter(curr.children.values()))
-            if child.is_wroker():
+            tree.del_node(name=node.name)
+
+            if node.num_children >= 1:
+                return
+
+    def top_tree(self, tree: Tree) -> None:
+        """
+        Checks if there are unwanted tops in the tree and removes them
+        @param tree: Tree to be topped
+        """
+        node = tree.root
+
+        while node.num_children == 1:
+            child = next(iter(node.children))
+            if child.is_worker():
                 break
 
-            prev = curr
-            curr = child
-
-        tree.set_root()
+            tree.del_node(node.name)
+            node = child
 
     def __get_connection(self, name: str) -> P4RuntimeSwitch:
         """
