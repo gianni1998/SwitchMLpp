@@ -15,9 +15,9 @@ class SDNController(P4Host):
     """
     Class that simulates an SDN controller for a P4 switch
     """
-    workers_in_group: Dict[int, List[str]]
-    port_lookup: Dict[str, Dict[str, int]]
 
+    port_lookup: Dict[str, Dict[str, int]]
+    "Look up dictionary for port numbers"
     net: Mininet
     "Mininet object of the network"
     mst: Tree
@@ -36,7 +36,6 @@ class SDNController(P4Host):
         self.ip_lookup = None
         self.mst = None
         self.connections = {}
-        self.workers_in_group = {}
 
         self.garden_of_eden = {}
 
@@ -48,11 +47,10 @@ class SDNController(P4Host):
         self.mst = get_mst(self.net)
         self.port_lookup = port_lookup(net)
 
-    def start(self):
+    def start(self) -> None:
         """
-        Method to open a tcp connection and listen for incomming traffic
+        Method to start the controller
         """
-
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             # s.setsockopt(socket.SOL_SOCKET, 25, str("eth0" + '\0').encode('utf-8'))
 
@@ -68,7 +66,7 @@ class SDNController(P4Host):
                 thread = threading.Thread(target=self._client_thread, args=(conn, addr))
                 thread.start()
 
-    def _client_thread(self, conn, addr):
+    def _client_thread(self, conn, addr) -> None:
         """
         Method that handles the establised tcp connection with a worker
         """
@@ -96,11 +94,10 @@ class SDNController(P4Host):
         if sub and tree is not None and tree.node_exists(wx):
             return
 
-        if mgid not in self.garden_of_eden:
+        if mgid not in self.garden_of_eden or self.garden_of_eden[mgid].num_nodes == 0:
             tree = self.garden_of_eden[mgid] = Tree()
             path = [wx, self.mst.get_node(wx).parent.name]
 
-            print(f"Path: {path}")
             self.expand_tree(tree=tree, path=path, mgid=mgid)
 
         else:
@@ -111,21 +108,24 @@ class SDNController(P4Host):
 
             if lca != root and sub:
                 right = shortest_path(self.mst, src=root, dst=lca)
-                print(f"src: {root}, dst: {lca} - {right}")
                 self.expand_tree(tree=tree, path=right, mgid=mgid)
 
             left = shortest_path(self.mst, src=wx, dst=lca)
-            print(f"src: {wx}, dst: {lca} - {left}")
             if sub:
                 self.expand_tree(tree=tree, path=left, mgid=mgid)
             else:
-                self.shrink_tree(tree=tree, path=left)
-                print("Snap tree")
-                self.top_tree(tree=tree)
+                tree.shrink_tree(path=left)
+                tree.top_tree()
 
         tree.set_root()
 
-    def expand_tree(self, tree: Tree, path: List[str], mgid: int):
+    def expand_tree(self, tree: Tree, path: List[str], mgid: int) -> None:
+        """
+        Method that expands a based on a given path
+        @param tree: Tree that needs to be expended
+        @param path: The given path
+        @param mgid: Multicast group ID
+        """
         prev = None
 
         for hop in path:
@@ -144,30 +144,6 @@ class SDNController(P4Host):
                                portp=self.port_lookup[prev.name][node.name])
 
             prev = node
-
-    def shrink_tree(self, tree: Tree, path: List[str]) -> None:
-        for hop in path:
-            node = tree.get_node(name=hop)
-
-            tree.del_node(name=node.name)
-
-            if node.num_children >= 1:
-                return
-
-    def top_tree(self, tree: Tree) -> None:
-        """
-        Checks if there are unwanted tops in the tree and removes them
-        @param tree: Tree to be topped
-        """
-        node = tree.root
-
-        while node.num_children == 1:
-            child = next(iter(node.children))
-            if child.is_worker():
-                break
-
-            tree.del_node(node.name)
-            node = child
 
     def __get_connection(self, name: str) -> P4RuntimeSwitch:
         """

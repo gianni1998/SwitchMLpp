@@ -179,8 +179,6 @@ class SMLNode(Node):
         del self._children[port]
         del self._name_to_port[name]
 
-        # Todo: Fix bug with not correctly deleting all nodes on s0
-
         num_workers_entry(conn=self._conn, mgid=self._mgid, num=self.num_children + 1, insert=False)
         sml_entry(conn=self._conn, port=port, mac=child.mac, ip=child.ip, insert=False)
 
@@ -190,8 +188,6 @@ class SMLNode(Node):
         else:
             self._conn.updateMulticastGroup(mgid=self._mgid, ports=self.ports)
             num_workers_entry(conn=self._conn, mgid=self._mgid, num=self.num_children, insert=True)
-
-        child.delete_parent()
 
     def add_parent(self, parent: 'Node', portc: int, portp: int) -> None:
         if self._parent is not None:
@@ -216,6 +212,8 @@ class SMLNode(Node):
         if self.num_children > 0:
             next_step_entry(conn=self._conn, mgid=self._mgid, step=0, port=0, insert=True)
 
+        self._parent = None
+        self._parent_port = 0
 
 class Tree:
     """
@@ -237,6 +235,10 @@ class Tree:
     @property
     def root(self) -> Node:
         return self._root
+    
+    @property
+    def num_nodes(self) -> int:
+        return len(self._nodes)
 
     def node_exists(self, name: str) -> bool:
         """
@@ -263,13 +265,13 @@ class Tree:
 
     def del_node(self, name: str) -> None:
         """
-        Deletes a node from the tree when it has no children
+        Deletes a Node from the tree
         @param name: Name of the node
         """
         node = self.get_node(name=name)
 
         if node.parent is not None:
-            node.delete_parent()
+            node.parent.delete_child(name=node.name)
 
         for child in node.children:
             child.delete_parent()
@@ -287,9 +289,39 @@ class Tree:
                 node = node.parent
 
             self._root = node
+        else:
+            self._root = None
+
+    def shrink_tree(self, path: List[str]) -> None:
+        """
+        Removes a given path from the tree
+        @param path: Path that needs to be removed
+        """
+        for hop in path:
+            node = self.get_node(name=hop)
+
+            if node.num_children >= 1:
+                return
+
+            self.del_node(name=node.name)
+
+    def top_tree(self) -> None:
+        """
+        Removes unwanted tops from the tree
+        """
+        node = self.root
+
+        while node.num_children == 1:
+            print(node.name)
+            child = next(iter(node.children))
+            if child.is_worker():
+                break
+
+            self.del_node(node.name)
+            node = child
     
     def __str__(self) -> str:
-        result = f"Root: {self.root.name}\n"
+        result = f"Root: {self.root.name if self.root is not None else None}\n"
 
         for v in self._nodes.values():
             result += v.__str__() + '\n'
