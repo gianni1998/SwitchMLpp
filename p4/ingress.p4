@@ -47,7 +47,12 @@ control TheIngress(inout headers hdr,
   }
 
   action set_num_workers(bit<32> num_workers) {
-    meta.numWorkers = num_workers;
+
+    if (num_workers == 1) {
+      meta.numWorkers = 1;
+    } else {
+      meta.numWorkers = num_workers;
+    }
   }
 
   action set_switch_rank(bit<32> rank) {
@@ -65,13 +70,14 @@ control TheIngress(inout headers hdr,
   }
 
   table num_workers {
-    key = { hdr.sml.mgid: exact; }
+    key = { meta.mgid: exact; }
     actions = {
       set_num_workers;
-      reply;
+      //reply;
+      NoAction;
     }
     size = 1024;
-    default_action = reply();
+    default_action = NoAction();//reply();
   }
 
   table next_step {
@@ -90,7 +96,16 @@ control TheIngress(inout headers hdr,
   }
 
   table debug {
-    key = { hdr.sync.mgid: exact;
+    key = { meta.numWorkers: exact;
+            meta.mgid: exact; }
+    actions = {NoAction;}
+    size = 1;
+  }
+
+  table debug2 {
+    key = { meta.numWorkers: exact;
+            standard_metadata.egress_spec: exact;
+            hdr.sync.mgid: exact;
             hdr.sync.type: exact;
             hdr.sync.offset: exact; 
             meta.nextStep: exact;
@@ -98,13 +113,7 @@ control TheIngress(inout headers hdr,
             meta.mgid: exact; 
             hdr.ipv4.sourceAddress: exact;
             hdr.ipv4.destinationAddress : exact;}
-    actions = { @defaultonly NoAction; }
-    size = 1;
-  }
-
-  table debug2 {
-    key = {meta.mgid: exact;}
-    actions = { @defaultonly NoAction; }
+    actions = {NoAction;}
     size = 1;
   }
 
@@ -123,8 +132,11 @@ control TheIngress(inout headers hdr,
           meta.mgid = hdr.sync.mgid;
         }
 
+        // Get number of workers in group
+        num_workers.apply();
+        debug.apply();
+
         next_step.apply();
-        debug2.apply();
       }
     
       if (hdr.sync.isValid()) {
@@ -134,19 +146,23 @@ control TheIngress(inout headers hdr,
             send_to_next_switch();
           } else {
             syncer.apply(hdr, 1);
-            hdr.sync.type = 1;
+
+            if (meta.numWorkers == 1) {
+              hdr.sync.type = 2;
+            } else {
+              hdr.sync.type = 1;
+            }
 
             sync_reply();
+            reply();
+            debug2.apply();
           }
         }
-
-        debug.apply(); 
 
       } else if (hdr.sml.isValid()) {
         bit<32> idx = 0;
 
-        // Get number of workers in group
-        num_workers.apply();
+        reply();
 
         // Save offset in register for sync
         syncer.apply(hdr, 0);
@@ -200,7 +216,7 @@ control TheIngress(inout headers hdr,
         }
       }
 
-      if ((!hdr.sml.isValid() && !hdr.sync.isValid()) || (hdr.sync.isValid() && hdr.sync.type == 1)) {
+      if ((!hdr.sml.isValid() && !hdr.sync.isValid()) || (hdr.sync.isValid() && hdr.sync.type != 0)) {
         ipv4Handler.apply(hdr, standard_metadata);
       }
     }

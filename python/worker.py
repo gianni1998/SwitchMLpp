@@ -40,7 +40,6 @@ class SMLWorker:
         """
         #self.initialise()
 
-        time.sleep(5)
         Log("Started syncing...")
         self.sync()
 
@@ -83,13 +82,16 @@ class SMLWorker:
                 unreliable_send(s, pkt, addr)
 
                 try: 
-                    pkt, _ = unreliable_receive(s, 2048)
-                    break
+                    result, _ = unreliable_receive(s, 2048)
+                    result = SyncPacket(result)
+
+                    if result[SyncPacket].type == 2 or result[SyncPacket].offset != 0:
+                        break
+
                 except socket.timeout:
                     Log("Time out")
 
-            pkt = SyncPacket(pkt)
-            self.offset = pkt[SyncPacket].offset
+            self.offset = result[SyncPacket].offset
 
         if self.offset != 0:
             n = int(self.offset/CHUNK_SIZE)

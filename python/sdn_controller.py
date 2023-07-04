@@ -33,7 +33,6 @@ class SDNController(P4Host):
         """
         P4Host.__init__(self, name, **params)
 
-        self.ip_lookup = None
         self.mst = None
         self.connections = {}
 

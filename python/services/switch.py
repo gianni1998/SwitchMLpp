@@ -13,7 +13,7 @@ def num_workers_entry(conn: P4RuntimeSwitch, mgid: int, num: int, insert: bool) 
     @param num: The number of workers
     @param insert: Boolean value that decides to inserted or remove the entry
     """
-    match = {"hdr.sml.mgid": mgid}
+    match = {"meta.mgid": mgid}
     params = {"num_workers": num}
 
     send_entry(conn=conn, table_info=NUM_WORKERS, match=match, params=params, insert=insert)
