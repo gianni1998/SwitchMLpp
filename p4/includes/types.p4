@@ -2,6 +2,7 @@
 #define _TYPES_H
 
 #define MAX_WORKERS 20
+#define CHUNK_THRESHOLD 64
 
 typedef bit<9>  sw_port_t;   /*< Switch port */
 typedef bit<48> mac_addr_t;  /*< MAC address */

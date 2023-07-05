@@ -1,5 +1,6 @@
 import socket
 import threading
+import ast
 from typing import Dict, List
 from mininet.net import Mininet
 
@@ -7,6 +8,7 @@ from python.lib.p4app.src.p4_mininet import P4Host, P4RuntimeSwitch
 
 from python.config import SDN_CONTROLLER_PORT, BUFFER_SIZE
 from python.models.tree import Tree, SMLNode
+from python.models.packet import SubscriptionPacket
 from python.services.network import port_lookup
 from python.services.tree import get_mst, find_lca, shortest_path
 
@@ -50,40 +52,24 @@ class SDNController(P4Host):
         """
         Method to start the controller
         """
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            # s.setsockopt(socket.SOL_SOCKET, 25, str("eth0" + '\0').encode('utf-8'))
+        while 1:
+            out = self.cmd("python -m python.services.tcp_server")
+            #out = self.cmd("nc -l -p 5005")
+            #print("Tjupapi: " + out)
 
-            s.bind(("", SDN_CONTROLLER_PORT))
-            s.listen()
+            thread = threading.Thread(target=self._client_thread, args=(out,))
+            thread.start()
 
-            while 1:
-                conn, addr = s.accept()
-
-                print(conn)
-                print(addr)
-
-                thread = threading.Thread(target=self._client_thread, args=(conn, addr))
-                thread.start()
-
-    def _client_thread(self, conn, addr) -> None:
+    def _client_thread(self, data) -> None:
         """
         Method that handles the establised tcp connection with a worker
         """
-        data = b''
-        while 1:
-            chunk = conn.recv(BUFFER_SIZE)
+        pkt = SubscriptionPacket(ast.literal_eval(data))
+        rank = pkt[SubscriptionPacket].rank
+        mgid = pkt[SubscriptionPacket].mgid
+        sub = pkt[SubscriptionPacket].type
 
-            if not chunk:
-                break
-            data += chunk
-
-            conn.sendall(data)
-        conn.close()
-
-        self._process(data, addr)
-
-    # def _process(data, addr):
-    def test5(self, rank: int, mgid: int, sub: bool) -> None:
+    #def test5(self, rank: int, mgid: int, sub: bool) -> None:
         wx = f"w{rank}"
 
         tree = self.garden_of_eden.get(mgid, None)

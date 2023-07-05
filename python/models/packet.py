@@ -66,5 +66,6 @@ class SyncPacket(Packet):
     fields_desc = [
         BitField("mgid", 0, 16),
         BitField("type", 0, 16),
-        BitField("offset", 0, 32)
+        BitField("offset", 0, 32),
+        BitField("rank", 0, 32)
     ]

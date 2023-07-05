@@ -38,8 +38,9 @@ class SMLWorker:
         """
         Method to start the work flow of a worker (initialise, all reduce and terminate)
         """
-        #self.initialise()
+        self.initialise()
 
+        time.sleep(1)
         Log("Started syncing...")
         self.sync()
 
@@ -57,7 +58,7 @@ class SMLWorker:
             RunIntTest("udp-iter-%d" % i, self.rank, data_in, True)
         Log("Done")
 
-        #self.terminate()
+        self.terminate()
 
 
     def initialise(self):
@@ -76,7 +77,7 @@ class SMLWorker:
             s.settimeout(TIMEOUT)
 
             addr = ("10.0.0.0", 65432)
-            pkt = raw(SyncPacket(mgid=self.mgid, type=0, offset=0))
+            pkt = raw(SyncPacket(mgid=self.mgid, type=0, offset=0, rank=self.rank))
 
             while 1:
                 unreliable_send(s, pkt, addr)
@@ -85,7 +86,7 @@ class SMLWorker:
                     result, _ = unreliable_receive(s, 2048)
                     result = SyncPacket(result)
 
-                    if result[SyncPacket].type == 2 or result[SyncPacket].offset != 0:
+                    if result[SyncPacket].type == 2:
                         break
 
                 except socket.timeout:
@@ -141,12 +142,15 @@ class SMLWorker:
         """
         Method to send a subscription packet over TCP
         """
-        pkt = raw(SubscriptionPacket(aggregation_id=self.mgid, 
+        pkt = raw(SubscriptionPacket(rank=self.rank,
+                                     mgid=self.mgid, 
                                      type=int(subscribe)))
         
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((self.sdn_ip, self.sdn_port))
-            s.send(pkt)
+            s.sendall(raw(pkt))
+
+        Log('sub request send')
 
 
 if __name__ == '__main__':

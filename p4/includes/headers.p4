@@ -92,6 +92,7 @@ header sync_t {
   bit<16> mgid;
   bit<16> type;
   bit<32> offset;
+  bit<32> rank;
 }
 
 struct headers {

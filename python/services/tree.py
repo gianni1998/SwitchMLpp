@@ -61,8 +61,6 @@ def shortest_path(tree: Tree, src: str, dst: str) -> List[str]:
     while queue:
         current, path = queue.popleft()
 
-        print(current.name)
-
         # Check if we have reached the target node
         if current.name == dst:
             return path + [current.name]

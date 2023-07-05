@@ -312,7 +312,6 @@ class Tree:
         node = self.root
 
         while node.num_children == 1:
-            print(node.name)
             child = next(iter(node.children))
             if child.is_worker():
                 break

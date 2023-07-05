@@ -15,7 +15,7 @@ control Synchroniser(inout headers hdr,
 
             if (sync == 1) {
                 hdr.sync.offset = value;
-            } else if (hdr.sml.offset > value) {
+            } else if (hdr.sml.offset > value || hdr.sml.offset + CHUNK_THRESHOLD < value) {
                 r.write(0, hdr.sml.offset);
             }
         }

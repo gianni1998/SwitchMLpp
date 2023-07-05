@@ -1,6 +1,7 @@
 #include "handlers/ipv4_handler.p4"
 #include "handlers/arp_handler.p4"
 #include "handlers/aggregation_handler.p4"
+#include "handlers/sync_handler.p4"
 
 #include "sml/worker_counter.p4"
 #include "sml/overseer.p4"
@@ -13,6 +14,7 @@ control TheIngress(inout headers hdr,
   IPv4Handler() ipv4Handler;
   ARPHandler() arpHandler;
   AggregationHandler() aggregationHandler;
+  SyncHandler() syncHandler;
 
   Overseer() overseer;
   WorkerCounter() workerCounter;
@@ -25,12 +27,6 @@ control TheIngress(inout headers hdr,
 
   action reply() {
     standard_metadata.egress_spec = standard_metadata.ingress_port;
-  }
-
-  action sync_reply() {
-    ipv4_addr_t temp = hdr.ipv4.sourceAddress;
-    hdr.ipv4.sourceAddress = hdr.ipv4.destinationAddress;
-    hdr.ipv4.destinationAddress = temp;
   }
 
   action send_to_next_switch() {
@@ -96,24 +92,8 @@ control TheIngress(inout headers hdr,
   }
 
   table debug {
-    key = { meta.numWorkers: exact;
-            meta.mgid: exact; }
-    actions = {NoAction;}
-    size = 1;
-  }
-
-  table debug2 {
-    key = { meta.numWorkers: exact;
-            standard_metadata.egress_spec: exact;
-            hdr.sync.mgid: exact;
-            hdr.sync.type: exact;
-            hdr.sync.offset: exact; 
-            meta.nextStep: exact;
-            meta.nextStepPort: exact; 
-            meta.mgid: exact; 
-            hdr.ipv4.sourceAddress: exact;
-            hdr.ipv4.destinationAddress : exact;}
-    actions = {NoAction;}
+    key = { hdr.sync.offset: exact; }
+    actions = { @defaultonly NoAction; }
     size = 1;
   }
 
@@ -132,37 +112,20 @@ control TheIngress(inout headers hdr,
           meta.mgid = hdr.sync.mgid;
         }
 
-        // Get number of workers in group
         num_workers.apply();
-        debug.apply();
-
         next_step.apply();
       }
     
       if (hdr.sync.isValid()) {
 
         if (hdr.sync.type == 0) {
-          if (meta.nextStep == 1) {
-            send_to_next_switch();
-          } else {
-            syncer.apply(hdr, 1);
-
-            if (meta.numWorkers == 1) {
-              hdr.sync.type = 2;
-            } else {
-              hdr.sync.type = 1;
-            }
-
-            sync_reply();
-            reply();
-            debug2.apply();
-          }
+          syncer.apply(hdr, 1);
+          debug.apply();
+          syncHandler.apply(hdr, standard_metadata, meta);
         }
 
       } else if (hdr.sml.isValid()) {
         bit<32> idx = 0;
-
-        reply();
 
         // Save offset in register for sync
         syncer.apply(hdr, 0);
